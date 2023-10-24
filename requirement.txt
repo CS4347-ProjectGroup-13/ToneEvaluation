@@ -8,3 +8,6 @@ numpy==1.24.1
 torch==2.0.0+cu117
 torchaudio==2.0.1+cu117
 torchvision==0.15.1+cu117
+nbstripout==0.3.10
+pinyin==0.4.0
+scikit-learn==1.3.1

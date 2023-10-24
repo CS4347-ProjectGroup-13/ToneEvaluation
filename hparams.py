@@ -19,3 +19,18 @@ class Hparams:
         'frame_size': 0.02,
         'batch_size': 8,
     }
+
+class Hparams_michigan:
+    args = {
+        'save_model_dir': './results/lr1e-3',
+        'device': 'cuda' if torch.cuda.is_available() else 'cpu',
+        'dataset_root': os.path.join(os.getcwd() , 'data_full'),
+        'sampling_rate': 16000,
+        'sample_length': 1.5,  # 1.5 second samples
+        'num_workers': 0,  # Number of additional thread for data loading. A large number may freeze your laptop.
+        'preload_audio': False,
+        'pad_audio': True,
+
+        'batch_size': 8,
+    }
+
