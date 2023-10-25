@@ -8,7 +8,7 @@ import torch
 
 class Hparams:
     args = {
-        'save_model_dir': './results/lr1e-3',
+        'save_model_dir': './results',
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
         'dataset_root': './data_mini/',
         'sampling_rate': 16000,
@@ -22,7 +22,7 @@ class Hparams:
 
 class Hparams_michigan:
     args = {
-        'save_model_dir': './results/lr1e-3',
+        'save_model_dir': './results',
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
         'dataset_root': os.path.join(os.getcwd() , 'data_full'),
         'sampling_rate': 16000,
