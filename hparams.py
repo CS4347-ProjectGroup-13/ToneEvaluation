@@ -8,7 +8,7 @@ import torch
 
 class Hparams:
     args = {
-        'save_model_dir': './results',
+        'save_model_dir': './results/',
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
         'dataset_root': './data_mini/',
         'sampling_rate': 16000,
@@ -22,15 +22,15 @@ class Hparams:
 
 class Hparams_michigan:
     args = {
-        'save_model_dir': './results',
+        'save_model_dir': './results/',
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-        'dataset_root': os.path.join(os.getcwd() , 'data_full'),
+        'dataset_root': os.path.join(os.getcwd(), 'data_full'),
         'sampling_rate': 16000,
         'sample_length': 1.5,  # 1.5 second samples
-        'num_workers': 0,  # Number of additional thread for data loading. A large number may freeze your laptop.
+        'num_workers': 4,  # Number of additional thread for data loading. A large number may freeze your laptop.
         'preload_audio': False,
         'pad_audio': True,
 
-        'batch_size': 8,
+        'batch_size': 32,
     }
 
