@@ -47,10 +47,10 @@ class ToneEval_Base(nn.Module):
             height = math.floor(((height + 2 * padding - dilation * (kernel_size - 1) - 1) / stride) + 1)
 
         self.linear5 = nn.Linear(512 * width * height, feat_dim)
-        self.batch5 = nn.BatchNorm2d(feat_dim)
+        self.batch5 = nn.BatchNorm1d(feat_dim)
 
         self.linear6 = nn.Linear(feat_dim, feat_dim)
-        self.batch6 = nn.BatchNorm2d(feat_dim)
+        self.batch6 = nn.BatchNorm1d(feat_dim)
 
         self.linear7 = nn.Linear(feat_dim, 4)
 
@@ -63,12 +63,12 @@ class ToneEval_Base(nn.Module):
         x = self.pool2(self.relu(self.batch2(self.conv2(x))))
         x = self.pool3(self.relu(self.batch3(self.conv3(x))))
         x = self.pool4(self.relu(self.batch4(self.conv4(x))))
-
+        
         x = torch.flatten(x, start_dim=1)
         x = self.relu(self.batch5(self.linear5(x)))
         x = self.relu(self.batch6(self.linear6(x)))
         x = self.softmax(self.linear7(x))
-
+        
         return x
 
 class ToneEval_Transformer(nn.Module):
