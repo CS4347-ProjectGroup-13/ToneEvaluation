@@ -211,7 +211,7 @@ class DatasetMichigan(Dataset):
         preload_audio (bool): Whether to preload all audio files into memory.
         pad_audio (bool): Whether to pad audio files to a fixed length.
         sample_length (float): The length of audio files to pad to, in seconds.
-        pipelineOptions (dict): Additional options for the data processing pipeline.
+        feature_options (dict): Additional options for the data processing pipeline.
 
     Raises:
         ValueError: If `dataset_index` is `None`.
@@ -238,7 +238,7 @@ class DatasetMichigan(Dataset):
                     preload_audio = True,
                     pad_audio = True,
                     sample_length = 1,
-                    pipelineOptions = {} #for future iterations
+                    feature_options = {} #for future iterations
 
                     ):
         
@@ -247,6 +247,7 @@ class DatasetMichigan(Dataset):
         self.pad_samples = librosa.time_to_samples(sample_length, sr=sampling_rate)
         self.preload_audio = preload_audio
         self.pad_audio = pad_audio
+        self.features = feature_options
 
         if dataset_index is None:
             raise ValueError("dataset_index must be specified. Call read_michigan_dataset_index()")
@@ -261,7 +262,7 @@ class DatasetMichigan(Dataset):
     def __len__(self):
         return len(self.indexData)
 
-    def __getitem__(self, idx, for_plot=False):
+    def __getitem__(self, idx, for_plot=False, features_override=None):
         '''
         Return spectrogram and 4 labels of an audio clip
 
@@ -282,6 +283,9 @@ class DatasetMichigan(Dataset):
             toneclass : str
                 The tone class of the word spoken in the audio clip.
         '''
+
+        features = self.features if features_override is None else features_override
+
         entry = self.indexData.iloc[idx]
 
         if self.preload_audio:
@@ -316,35 +320,49 @@ class DatasetMichigan(Dataset):
 
 
         # Thanks @Sijin for getting us started
+        results = {}
 
         #mel_spectrogram
-        mel_spectrogram = librosa.feature.melspectrogram(
-            y=padded_audio_data, sr=self.sampling_rate, 
-            hop_length=mel_spectrogram_hop_length, 
-            n_fft=mel_spectrogram_n_fft,
-            win_length=mel_spectrogram_window_length,
-            n_mels=mel_spectrogram_n_mels,
-            ) 
-        mel_spectrogram_normalised_log_scale = librosa.amplitude_to_db(mel_spectrogram, ref=np.max)
+        if "mel_spectrogram" in features:
+            mel_spectrogram = librosa.feature.melspectrogram(
+                y=padded_audio_data, sr=self.sampling_rate, 
+                hop_length=mel_spectrogram_hop_length, 
+                n_fft=mel_spectrogram_n_fft,
+                win_length=mel_spectrogram_window_length,
+                n_mels=mel_spectrogram_n_mels,
+                ) 
+            mel_spectrogram_normalised_log_scale = librosa.amplitude_to_db(mel_spectrogram, ref=np.max)
+            results["mel_spectrogram"] = mel_spectrogram_normalised_log_scale
+        else:
+            # mel_spectrogram is mandatory
+            raise ValueError("Features: mel_spectrogram is mandatory")
         
         #YIN
-        yin = librosa.yin(y=padded_audio_data, fmin=yinPyinMinFreq, fmax=yinPyinMaxFreq, sr=self.sampling_rate, frame_length=yinPyinFrameLength , hop_length=yinPyinHopLength)
-        yin_normalised = (yin - yinPyinMinFreq) / (yinPyinMaxFreq - yinPyinMinFreq)
+        if "yin" in features:
+            yin = librosa.yin(y=padded_audio_data, fmin=yinPyinMinFreq, fmax=yinPyinMaxFreq, sr=self.sampling_rate, frame_length=yinPyinFrameLength , hop_length=yinPyinHopLength)
+            yin_normalised = (yin - yinPyinMinFreq) / (yinPyinMaxFreq - yinPyinMinFreq)
 
-        # lowpass filter for yin
-        # sosfilt = signal.butter(2, 50, 'lp', fs=yinEffectivePostSR, output='sos')
-        # yin_normalised = signal.sosfilt(sosfilt, yin_normalised)
+            # lowpass filter for yin
+            # sosfilt = signal.butter(2, 50, 'lp', fs=yinEffectivePostSR, output='sos')
+            # yin_normalised = signal.sosfilt(sosfilt, yin_normalised)
+            results["yin"] = yin_normalised
+        else:
+            yin_normalised = np.zeros(1)
 
-        #PYIN
-        # decimated for speed. Pyin is slow
-        resampled_forPyin = signal.decimate(padded_audio_data, pYinDecimationFactor, ftype='fir', axis=-1, zero_phase=True)
-        pyin_fundamental ,pyin_voiced, pyin_probability, =librosa.pyin(y=resampled_forPyin, fmin=yinPyinMinFreq, fmax=pYinMaxFreq, sr=pYinSampleRate, frame_length=pYinFrameLength , hop_length=pYinHopLength)
-        pyin_fundamental_no_nan = np.nan_to_num(pyin_fundamental,nan=yinPyinMinFreq) # nan_values go to minfreq
-        pyin_fundamental_normalised = (pyin_fundamental_no_nan - yinPyinMinFreq) / (pYinMaxFreq - yinPyinMinFreq)
+        if "pyin" in features:
+            #PYIN
+            # decimated for speed. Pyin is slow
+            resampled_forPyin = signal.decimate(padded_audio_data, pYinDecimationFactor, ftype='fir', axis=-1, zero_phase=True)
+            pyin_fundamental ,pyin_voiced, pyin_probability, =librosa.pyin(y=resampled_forPyin, fmin=yinPyinMinFreq, fmax=pYinMaxFreq, sr=pYinSampleRate, frame_length=pYinFrameLength , hop_length=pYinHopLength)
+            pyin_fundamental_no_nan = np.nan_to_num(pyin_fundamental,nan=yinPyinMinFreq) # nan_values go to minfreq
+            pyin_fundamental_normalised = (pyin_fundamental_no_nan - yinPyinMinFreq) / (pYinMaxFreq - yinPyinMinFreq)
 
-        # lowpass filter for yin
-        # sosfilt = signal.butter(2, 50, 'lp', fs=pYinEffectivePostSR, output='sos')
-        # pyin_fundamental_normalised = signal.sosfilt(sosfilt, pyin_fundamental_normalised)
+            # lowpass filter for yin
+            # sosfilt = signal.butter(2, 50, 'lp', fs=pYinEffectivePostSR, output='sos')
+            # pyin_fundamental_normalised = signal.sosfilt(sosfilt, pyin_fundamental_normalised)
+            results["pyin"] = pyin_fundamental_normalised
+        else:
+            pyin_fundamental_normalised = np.zeros(1)
 
         # labels 
         word = entry["word"]
@@ -352,12 +370,16 @@ class DatasetMichigan(Dataset):
 
         if for_plot:
             return padded_audio_data,mel_spectrogram_normalised_log_scale, yin_normalised, pyin_fundamental_normalised, word, toneclass
+            # out = [x[1] for x in results.items()] + [word, toneclass]
+            # return out
         else:
             mel_spectrogram_normalised_log_scale_torch = torch.from_numpy(mel_spectrogram_normalised_log_scale)
             yin_normalised_torch = torch.from_numpy(yin_normalised)
             pyin_normalised_torch = torch.from_numpy(pyin_fundamental_normalised)
 
             return mel_spectrogram_normalised_log_scale_torch, yin_normalised_torch, pyin_normalised_torch, word, toneclass
+            # out = [torch.from_numpy(x[1]) for x in results.items()] + [word, toneclass]
+            # return out
         
     def plot_item(self, idx):
         """
@@ -383,7 +405,7 @@ class DatasetMichigan(Dataset):
         plt.show()
 
 
-def get_data_loader_michigan(args, test_size = 0.2):
+def get_data_loader_michigan(args, test_size = 0.2, split_individual = False):
     """
     Returns train and test data loaders for the Michigan dataset.
 
@@ -406,12 +428,18 @@ def get_data_loader_michigan(args, test_size = 0.2):
             - data_loader_test (DataLoader): The testing data loader.
     """
     index = read_michigan_dataset_index()
-    tone_classes = index["toneclass"].values
-    ids = list(range(len(index)))
-    train_ids, test_ids= sklearn.model_selection.train_test_split(ids, test_size=test_size, random_state=42, shuffle=True, stratify=tone_classes)
 
-    train_index = index.iloc[train_ids]
-    test_index = index.iloc[test_ids]
+    if split_individual:
+        tone_classes = index["toneclass"].values
+        ids = list(range(len(index)))
+        train_ids, test_ids= sklearn.model_selection.train_test_split(ids, test_size=test_size, random_state=42, shuffle=True, stratify=tone_classes)
+
+        train_index = index.iloc[train_ids]
+        test_index = index.iloc[test_ids]
+    else:
+        filter_by_speaker = index["participantID"].isin({"FV1","MV1"})
+        test_index = index[filter_by_speaker]
+        train_index =  index[~filter_by_speaker]
 
     train_ds = DatasetMichigan(
         dataset_index=train_index, 
@@ -420,6 +448,7 @@ def get_data_loader_michigan(args, test_size = 0.2):
         preload_audio=args['preload_audio'],
         sample_length=args['sample_length'],
         pad_audio=args['pad_audio'],
+        feature_options=args['features'],
         )
     
     test_ds = DatasetMichigan(
@@ -429,6 +458,7 @@ def get_data_loader_michigan(args, test_size = 0.2):
         preload_audio=args['preload_audio'],
         sample_length=args['sample_length'],
         pad_audio=args['pad_audio'],
+        feature_options=args['features'],
         )
     
     data_loader_train = DataLoader(

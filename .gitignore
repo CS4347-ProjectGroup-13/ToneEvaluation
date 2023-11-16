@@ -55,4 +55,5 @@ data_full/*
 !data_full/placeholder.txt
 
 test.ipynb
+results/*
 

@@ -30,6 +30,11 @@ class Hparams_michigan:
         'num_workers': 4,  # Number of additional thread for data loading. A large number may freeze your laptop.
         'preload_audio': False,
         'pad_audio': True,
+        'features':{
+            "mel_spectrogram": {},
+            "yin": {},
+            # "pyin": {},
+        },
 
         'batch_size': 32,
     }
