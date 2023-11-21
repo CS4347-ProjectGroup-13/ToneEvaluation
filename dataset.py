@@ -1,20 +1,16 @@
 import math
-import json
 import torch
+import json
 import librosa
-import torchaudio
 import numpy as np
-from tqdm import tqdm
-from torch.utils.data import Dataset, DataLoader
-import time #delete
 import scipy.signal as signal
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-
+import sklearn.model_selection
 
 from utils import read_json, save_json, ls, jpath
-import sklearn.model_selection
+from torch.utils.data import Dataset, DataLoader
 
 def move_data_to_device(data, device):
     ret = []
@@ -22,7 +18,6 @@ def move_data_to_device(data, device):
         if isinstance(i, torch.Tensor):
             ret.append(i.to(device))
     return ret
-
 
 def get_data_loader(split, args, fns=None):
     dataset = MyDataset(
@@ -43,7 +38,6 @@ def get_data_loader(split, args, fns=None):
         collate_fn=collate_fn,
     )
     return data_loader
-
 
 def collate_fn(batch):
     '''
@@ -147,7 +141,6 @@ class MyDataset(Dataset):
         
         return mel_spectrogram, yin, pyin
 
-
 def read_michigan_dataset_index(data_root=os.path.join(os.getcwd(),"data_full")):
     """
     Reads the Michigan dataset index and returns a pandas DataFrame containing the participant ID, word, tone class, and filename for each audio file.
@@ -176,9 +169,6 @@ def read_michigan_dataset_index(data_root=os.path.join(os.getcwd(),"data_full"))
     audioData = [parseAudioIndex(filename) for filename in audioIndex]
     return pd.DataFrame.from_records(data=audioData, columns=["participantID", "word", "toneclass", "filename"])
 
-import os
-import librosa
-
 def read_michigan_dataset_audio(filename, 
                                 data_root=os.path.join(os.getcwd(),"data_full"),
                                 sr=16000,
@@ -197,8 +187,6 @@ def read_michigan_dataset_audio(filename,
     """
     filepath = os.path.join(data_root, 'michigan', 'tone_perfect_all_mp3', 'tone_perfect', filename)
     return librosa.load(filepath, sr=sr, mono=mono)[0]
-
-
 
 class DatasetMichigan(Dataset):
     """
@@ -382,7 +370,6 @@ class DatasetMichigan(Dataset):
         librosa.display.specshow(mel_spectrogram_normalised_log_scale, sr=16000, hop_length=321, ax=ax4)
         plt.show()
 
-
 def get_data_loader_michigan(args, test_size = 0.2):
     """
     Returns train and test data loaders for the Michigan dataset.
@@ -447,9 +434,221 @@ def get_data_loader_michigan(args, test_size = 0.2):
     )
     return train_ds, test_ds , data_loader_train, data_loader_test
 
-import os
 def read_aidatatang_index(data_root):
     transcript_path = os.path.join(data_root, 'aidatatang_200zh', 'transcript', 'aidatatang_200_zh_transcript.txt')
     with open(transcript_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
     print(lines[0])
+
+
+def read_synthesized_michigan_dataset_index(data_type, data_root=os.path.join(os.getcwd(), "data_synthesized")):
+    """
+    Reads the synthesized Michigan dataset index and returns a pandas DataFrame containing the participant ID, word, tone class, and filename for each audio file.
+
+    Args:
+        data_root (str): The root directory of the Michigan dataset. Defaults to the 'data_full' directory in the current working directory.
+
+    Returns:
+        dict: A Dictionary containing the filename, list of onset/offset times and tone class for each audio file.
+    """
+    with open(os.path.join(data_root, data_type, f'{data_type}_labels.json'), 'r', encoding='utf8') as f:
+        data = f.read()
+        data = json.loads(data)
+    return data
+
+def read_synthesized_michigan_dataset_audio(filename, 
+                                data_type,
+                                data_root=os.path.join(os.getcwd(), "data_synthesized"),
+                                sr=16000,
+                                mono=True):
+    """
+    Reads an audio file from the synthesized Michigan dataset.
+
+    Args:
+        filename (str): The name of the audio file to read.
+        data_type (str): The type of data to read. Either 'train' or 'test'.
+        data_root (str, optional): The root directory of the dataset. Defaults to the 'data_synthesized' directory in the current working directory.
+        sr (int, optional): The target sampling rate of the audio file. Defaults to 16000.
+        mono (bool, optional): Whether to convert the audio to mono. Defaults to True.
+
+    Returns:
+        numpy.ndarray: The audio data as a 1D numpy array.
+    """
+    filepath = os.path.join(data_root, data_type, filename)
+    return librosa.load(filepath, sr=sr, mono=mono)[0]
+
+class DatasetMichiganSynthesized(Dataset):
+    """
+    A class representing a dataset of synthesized audio files.
+
+    Args:
+        data_type (str): The type of data in the dataset. Either 'train' or 'test'.
+        dataset_root (str): The root directory of the dataset.
+        dataset_index (dict): A Dictionary containing metadata about the audio files in the dataset.
+        sampling_rate (int): The sampling rate to use when loading audio files.
+        preload_audio (bool): Whether to preload all audio files into memory.
+        pad_audio (bool): Whether to pad audio files to a fixed length.
+        sample_length (float): The length of audio files to pad to, in seconds.
+        pipelineOptions (dict): Additional options for the data processing pipeline.
+
+    Raises:
+        ValueError: If `dataset_index` is `None`.
+
+    Attributes:
+        dataset_root (str): The root directory of the dataset.
+        sampling_rate (int): The sampling rate to use when loading audio files.
+        pad_samples (int): The number of samples to pad audio files to.
+        preload_audio (bool): Whether to preload all audio files into memory.
+        pad_audio (bool): Whether to pad audio files to a fixed length.
+        indexData (pandas.DataFrame): A DataFrame containing metadata about the audio files in the dataset.
+
+    Methods:
+        read_michigan_dataset_index: Reads the dataset index from disk.
+        read_michigan_dataset_audio: Reads an audio file from disk.
+
+    Examples:
+        >>> dataset = Dataset(dataset_root="./data_full", dataset_index=index_df, preload_audio=True)
+    """
+    def __init__(self, 
+                    data_type,
+                    dataset_root = os.path.join(os.getcwd(),"data_synthesized"),
+                    dataset_index = None,
+                    sampling_rate = 16000,
+                    preload_audio = True,
+                    pad_audio = True,
+                    sample_length = 10,
+                    pipelineOptions = {} #for future iterations
+                    ):
+        
+        self.data_type = data_type
+        self.dataset_root = dataset_root
+        self.sampling_rate = sampling_rate
+        self.pad_samples = librosa.time_to_samples(sample_length, sr=sampling_rate)
+        self.preload_audio = preload_audio
+        self.pad_audio = pad_audio
+
+        if dataset_index is None:
+            raise ValueError("dataset_index must be specified. Call read_synthesized_michigan_dataset_index()")
+        else:
+            self.indexData = dataset_index
+            
+        if preload_audio:
+            self.audioData = {}
+            for filename in self.indexData:
+                self.audioData[filename] = read_synthesized_michigan_dataset_audio(filename, data_type=self.data_type, sr=self.sampling_rate, mono=True)
+
+    def __len__(self):
+        return len(self.indexData)
+
+    def __getitem__(self, idx, for_plot=False):
+        '''
+        Return spectrogram and 4 labels of an audio clip
+
+        Parameters:
+        -----------
+        idx : int
+            Index of the audio clip to retrieve.
+        Returns:
+        --------
+            mel_spectrogram_normalised_log_scale_torch : torch.Tensor
+                The normalized log-scale mel spectrogram of the audio clip, as a PyTorch tensor.
+            yin_normalised_torch : torch.Tensor
+                The normalized YIN pitch estimate of the audio clip, as a PyTorch tensor.
+            pyin_normalised_torch : torch.Tensor
+                The normalized fundamental frequency estimate of the audio clip, obtained using the PYIN algorithm, as a PyTorch tensor.
+            word : str
+                The word spoken in the audio clip.
+            toneclass : str
+                The tone class of the word spoken in the audio clip.
+        '''
+        filename = f'{self.data_type}_{idx + 1}.mp3'
+
+        if self.preload_audio:
+            audio_data = self.audioData[filename]
+        else:
+            audio_data = read_michigan_dataset_audio(filename, data_type=self.data_type, sr=self.sampling_rate, mono=True)
+
+        if self.pad_audio:
+            padded_audio_data = np.pad(audio_data, (0, max(self.pad_samples - len(audio_data),0)), 'constant')
+        else:
+            padded_audio_data = audio_data
+
+        # pipeline parameters. refactor later
+        mel_spectrogram_hop_length = 321
+        mel_spectrogram_window_length = 1024
+        mel_spectrogram_n_fft = 1024
+        mel_spectrogram_n_mels = 128
+
+        #mel_spectrogram
+        mel_spectrogram = librosa.feature.melspectrogram(
+            y=padded_audio_data, sr=self.sampling_rate, 
+            hop_length=mel_spectrogram_hop_length, 
+            n_fft=mel_spectrogram_n_fft,
+            win_length=mel_spectrogram_window_length,
+            n_mels=mel_spectrogram_n_mels,
+            ) 
+        mel_spectrogram_normalised_log_scale = librosa.amplitude_to_db(mel_spectrogram, ref=np.max)
+
+        if for_plot:
+            return padded_audio_data, mel_spectrogram_normalised_log_scale
+        else:
+            mel_spectrogram_normalised_log_scale_torch = torch.from_numpy(mel_spectrogram_normalised_log_scale)
+            return mel_spectrogram_normalised_log_scale_torch, self.indexData[filename]
+
+def get_data_loader_synthesized_michigan(args):
+    """
+    Returns train and test data loaders for the synthesized versions of the Michigan dataset.
+
+    Args:
+        args (dict): A dictionary containing the following keys:
+            - dataset_root (str): The root directory of the synthesized dataset.
+            - sampling_rate (int): The sampling rate of the audio files.
+            - preload_audio (bool): Whether to preload audio files into memory.
+            - sample_length (int): The length of each audio sample.
+            - pad_audio (bool): Whether to pad audio samples to the specified length.
+            - batch_size (int): The batch size for the data loaders.
+            - num_workers (int): The number of worker threads for the data loaders.
+
+    Returns:
+        tuple: A tuple containing the following elements:
+            - train_ds (DatasetMichigan): The training dataset.
+            - test_ds (DatasetMichigan): The testing dataset.
+            - data_loader_train (DataLoader): The training data loader.
+            - data_loader_test (DataLoader): The testing data loader.
+    """
+    train_index = read_synthesized_michigan_dataset_index(data_type='train')
+    test_index = read_synthesized_michigan_dataset_index(data_type='test')
+
+    train_ds = DatasetMichigan(
+        dataset_index=train_index, 
+        dataset_root=args['dataset_root'], 
+        sampling_rate=args['sampling_rate'], 
+        preload_audio=args['preload_audio'],
+        sample_length=args['sample_length'],
+        pad_audio=args['pad_audio'],
+        )
+    
+    test_ds = DatasetMichigan(
+        dataset_index=test_index, 
+        dataset_root=args['dataset_root'], 
+        sampling_rate=args['sampling_rate'], 
+        preload_audio=args['preload_audio'],
+        sample_length=args['sample_length'],
+        pad_audio=args['pad_audio'],
+        )
+    
+    data_loader_train = DataLoader(
+        train_ds,
+        batch_size=args['batch_size'],
+        num_workers=args['num_workers'],
+        pin_memory=True,
+        shuffle=True,
+    )
+    data_loader_test = DataLoader(
+        test_ds,
+        batch_size=args['batch_size'],
+        num_workers=args['num_workers'],
+        pin_memory=True,
+        shuffle=True,
+    )
+    return train_ds, test_ds , data_loader_train, data_loader_test
