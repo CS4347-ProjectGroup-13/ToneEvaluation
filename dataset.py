@@ -933,6 +933,7 @@ def run_segmentation(dataset = None):
     transcription_results = []
     segementation_times_results = []
     delimiter_time_results = []
+    audioData = []
 
 
     for batch_id, batch in enumerate(tqdm(test_data_loader)):
@@ -947,8 +948,9 @@ def run_segmentation(dataset = None):
         transcription_results.append(transcription)
         segementation_times_results.append(segementation_times)
         delimiter_time_results.append(delimiter_time)
+        audioData.append(combinedAudio)
 
-    results = sentence_results, transcription_results, segementation_times_results, delimiter_time_results
+    results = sentence_results, transcription_results, segementation_times_results, delimiter_time_results,audioData
     dataset_properties = dataset.get_properties()
     return results, dataset_properties
 
@@ -1004,12 +1006,16 @@ def get_alignment(x):
     return pd.Series(d)
     
 def processes_segementation_results_global(segmentation_Results):
-    sentence_results, transcription_results, segementation_times_results, delimiter_time_results= segmentation_Results
+    sentence_results, transcription_results, segementation_times_results, delimiter_time_results,audioData= segmentation_Results
     sentence_results = shallow_concat(sentence_results, )
     transcription_results = shallow_concat(transcription_results)
     segementation_times_results = shallow_concat(segementation_times_results )
+    audioData = shallow_concat(audioData)
+    audioData = [x.numpy() for x in audioData]
     delimiter_time_results = torch.concat(delimiter_time_results, axis  =0).numpy().tolist()
     
+    ds_len = len(sentence_results)
+
 
     d = {
         "sentence_results": sentence_results,
@@ -1022,15 +1028,18 @@ def processes_segementation_results_global(segmentation_Results):
     word_count = df["sentence_results"].apply(lambda x: len(x.split("_")))
     df["word_count"] = word_count
 
-    df["segementation_times_results"] = [[]]*500
+    df["segementation_times_results"] = [[]]*ds_len
     df["segementation_times_results"] =segementation_times_results
 
-    df["delimiter_time_results"] = [[]]*500
+    df["delimiter_time_results"] = [[]]*ds_len
     df["delimiter_time_results"] = delimiter_time_results
 
     df["diff"] = df.apply(lambda x: x["word_count"] - len(x["segementation_times_results"]), axis=1)
 
-    # df = df.iloc[[3]]
-
     df[["err","mappings"]] = df.apply(get_alignment, axis=1)
-    return df
+
+
+    aud_df = pd.DataFrame()
+    aud_df["audio"] = [[]]*ds_len
+    aud_df["audio"] = audioData
+    return df, aud_df
