@@ -1,7 +1,8 @@
 import math
 import torch
 import torch.nn as nn
-# import torch.nn.functional as F
+
+from sklearn.metrics import f1_score
 
 class ToneEval_Base(nn.Module):
     '''
@@ -85,3 +86,198 @@ class ToneEval_Transformer(nn.Module):
     def forward(self, x):
 
         return None
+
+class SegmentLossFunc:
+    def __init__(self):
+        # self.device = device
+        # self.onset_criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([15.0], device=device))
+        # self.offset_criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([15.0], device=device))
+        self.onset_criterion = nn.BCELoss()
+        self.offset_criterion = nn.BCELoss()
+
+    def get_loss(self, out, tgt):
+        out_on, out_off = out
+        tgt_on, tgt_off = tgt
+
+        out_on = torch.flatten(out_on)
+        out_off = torch.flatten(out_off)
+        tgt_on = torch.flatten(tgt_on).type(torch.float32)
+        tgt_off = torch.flatten(tgt_off).type(torch.float32)
+        
+        out_on = torch.sigmoid(out_on)
+        out_off = torch.sigmoid(out_off)
+
+        onset_loss = self.onset_criterion(out_on, tgt_on)
+        offset_loss = self.offset_criterion(out_off, tgt_off)
+
+        total_loss = onset_loss + offset_loss
+        return total_loss, onset_loss, offset_loss
+
+
+class SegmentMetrics:
+    def __init__(self, loss_func):
+        self.buffer = {}
+        self.loss_func = loss_func
+
+    def update(self, out, tgt, losses=None):
+        '''
+        Compute metrics for one batch of output and target.
+        F1 score for onset and offset,
+        Append the results to a list, and link the list to self.buffer[metric_name].
+        '''
+        with torch.no_grad():
+            out_on, out_off = out
+            tgt_on, tgt_off = tgt
+
+            if losses == None:
+                losses = self.loss_func.get_loss(out, tgt)
+
+            out_on = torch.flatten(out_on)
+            out_off = torch.flatten(out_off)
+            tgt_on = torch.flatten(tgt_on)
+            tgt_off = torch.flatten(tgt_off)
+
+            # generate prediction labels for f1 score computation
+            out_on = torch.sigmoid(out_on)
+            out_on[out_on >= 0.5] = 1
+            out_on[out_on < 0.5] = 0
+            out_on = out_on.long()
+
+            out_off = torch.sigmoid(out_off)
+            out_off[out_off >= 0.5] = 1
+            out_off[out_off < 0.5] = 0
+            out_off = out_off.long()
+
+            # metric computation
+            onset_f1 = f1_score(tgt_on.cpu(), out_on.cpu())
+            offset_f1 = f1_score(tgt_off.cpu(), out_off.cpu())
+        
+            batch_metric = {
+                'loss': losses[0].item(),
+                'onset_loss': losses[1].item(),
+                'offset_loss': losses[2].item(),
+                'onset_f1': onset_f1,
+                'offset_f1': offset_f1,
+            }
+
+            for k in batch_metric:
+                if k in self.buffer:
+                    self.buffer[k].append(batch_metric[k])
+                else:
+                    self.buffer[k] = [batch_metric[k]]
+
+    def get_value(self):
+        for k in self.buffer:
+            self.buffer[k] = sum(self.buffer[k]) / len(self.buffer[k])
+        ret = self.buffer
+        self.buffer = {}
+        return ret
+
+class ToneSegment_Base(nn.Module):
+    '''
+    This the base model for Segmentation of multiple utterances.
+    '''
+
+    def __init__(self, input_shape):
+        '''
+        Define Layers
+        '''
+        super().__init__()
+        self.feat_dim = input_shape[1]
+        
+        channel1 = 16
+        channel2 = 32
+        channel3 = 64
+
+        self.conv1 = nn.Conv2d(input_shape[0], channel1, kernel_size=(3, 3), padding=(1, 1))
+        self.norm1 = nn.BatchNorm2d(channel1)
+        self.pool1 = nn.MaxPool2d(kernel_size=(1, 2))
+        
+        self.conv2 = nn.Conv2d(channel1, channel2, kernel_size=(3, 3), padding=(1, 1))
+        self.norm2 = nn.BatchNorm2d(channel2)
+        self.pool2 = nn.MaxPool2d(kernel_size=(1, 2))
+        
+        self.conv3 = nn.Conv2d(channel2, channel3, kernel_size=(3, 3), padding=(1, 1))
+        self.norm3 = nn.BatchNorm2d(channel3)
+        
+        self.act = nn.ReLU()
+        self.linear = nn.Linear(channel3 * (self.feat_dim // 4), self.feat_dim)
+
+        self.onset_pred = nn.Linear(self.feat_dim, 1)
+        self.offset_pred = nn.Linear(self.feat_dim, 1)
+
+    def forward(self, x):
+        # [Batch, Channel, Feature, Time]
+        x = x.permute(0, 1, 3, 2)
+
+        # [Batch, Channel, Time, Feature]
+        x = self.act(self.norm1(self.conv1(x)))
+        x = self.pool1(x)
+        x = self.act(self.norm2(self.conv2(x)))
+        x = self.pool2(x)
+        x = self.act(self.norm3(self.conv3(x)))
+
+        x = x.permute(0, 2, 1, 3)
+        x = torch.flatten(x, start_dim=2, end_dim=3)
+        x = self.linear(x)
+
+        onset_logits = torch.flatten(self.onset_pred(x), start_dim=-2)
+        offset_logits = torch.flatten(self.offset_pred(x), start_dim=-2)
+
+        return onset_logits, offset_logits
+
+class ToneSegment_Enhanced(nn.Module):
+    '''
+    This the base model for Segmentation of multiple utterances.
+    '''
+
+    def __init__(self, input_shape):
+        '''
+        Define Layers
+        '''
+        super().__init__()
+        self.feat_dim = input_shape[1]
+        
+        channel1 = 16
+        channel2 = 32
+        channel3 = 64
+
+        self.conv1 = nn.Conv2d(input_shape[0], channel1, kernel_size=(3, 3), padding=(1, 1))
+        self.norm1 = nn.BatchNorm2d(channel1)
+        self.pool1 = nn.MaxPool2d(kernel_size=(1, 2))
+        
+        self.conv2 = nn.Conv2d(channel1, channel2, kernel_size=(3, 3), padding=(1, 1))
+        self.norm2 = nn.BatchNorm2d(channel2)
+        self.pool2 = nn.MaxPool2d(kernel_size=(1, 2))
+        
+        self.conv3 = nn.Conv2d(channel2, channel3, kernel_size=(3, 3), padding=(1, 1))
+        self.norm3 = nn.BatchNorm2d(channel3)
+
+        self.linear1 = nn.Linear(channel3 * (self.feat_dim // 4), self.feat_dim)
+        self.linear2 = nn.Linear(self.feat_dim, self.feat_dim)
+
+        self.onset_pred = nn.Linear(self.feat_dim, 1)
+        self.offset_pred = nn.Linear(self.feat_dim, 1)
+        
+        self.act = nn.ReLU()
+
+    def forward(self, x):
+        # [Batch, Channel, Feature, Time]
+        x = x.permute(0, 1, 3, 2)
+
+        # [Batch, Channel, Time, Feature]
+        x = self.act(self.norm1(self.conv1(x)))
+        x = self.pool1(x)
+        x = self.act(self.norm2(self.conv2(x)))
+        x = self.pool2(x)
+        x = self.act(self.norm3(self.conv3(x)))
+
+        x = x.permute(0, 2, 1, 3)
+        x = torch.flatten(x, start_dim=2, end_dim=3)
+        x = self.act(self.linear1(x))
+        x = self.act(self.linear2(x))
+        
+        onset_logits = torch.flatten(self.onset_pred(x), start_dim=-2)
+        offset_logits = torch.flatten(self.offset_pred(x), start_dim=-2)
+
+        return onset_logits, offset_logits

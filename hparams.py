@@ -28,9 +28,22 @@ class Hparams_michigan:
         'sampling_rate': 16000,
         'sample_length': 1.5,  # 1.5 second samples
         'num_workers': 4,  # Number of additional thread for data loading. A large number may freeze your laptop.
-        'preload_audio': False,
+        'preload_audio': True,
         'pad_audio': True,
 
         'batch_size': 32,
     }
 
+class Hparams_synthesized_michigan:
+    args = {
+        'save_model_dir': './results_segmentation/',
+        'device': 'cuda' if torch.cuda.is_available() else 'cpu',
+        'dataset_root': os.path.join(os.getcwd(), 'data_synthesized'),
+        'sampling_rate': 16000,
+        'sample_length': 10,  # 10 second samples
+        'num_workers': 4,  # Number of additional thread for data loading. A large number may freeze your laptop.
+        'preload_audio': True,
+        'pad_audio': True,
+
+        'batch_size': 32,
+    }
