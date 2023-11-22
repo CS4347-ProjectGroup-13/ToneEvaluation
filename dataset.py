@@ -279,6 +279,98 @@ class DatasetMichigan(Dataset):
 
     def __len__(self):
         return len(self.indexData)
+    
+    @staticmethod
+    def preproccessData(audio_data,features={}, pad_audio = True, pad_samples = 16000, sampling_rate = 16000):
+        """
+        Preprocesses the audio data by applying various feature extraction techniques.
+
+        Args:
+            audio_data (numpy.ndarray): The input audio data.
+            features (dict): A dictionary specifying the features to extract. Possible keys are "mel_spectrogram", "yin", and "pyin".
+            pad_audio (bool): Whether to pad the audio data to a fixed length.
+            pad_samples (int): The length to which the audio data should be padded.
+            sampling_rate (int): The sampling rate of the audio data.
+
+        Returns:
+            tuple: A tuple containing the preprocessed audio data and the extracted features.
+                - padded_audio_data (numpy.ndarray): The padded audio data.
+                - mel_spectrogram_normalised_log_scale (numpy.ndarray): The normalized log-scaled mel spectrogram.
+                - yin_normalised (numpy.ndarray): The normalized YIN pitch estimation.
+                - pyin_fundamental_normalised (numpy.ndarray): The normalized PYIN pitch estimation.
+        """
+        if pad_audio:
+            padded_audio_data = np.pad(audio_data, (0, max(pad_samples - len(audio_data),0)), 'constant')
+        else:
+            padded_audio_data = audio_data
+
+        # pipeline parameters. refactor later
+        mel_spectrogram_hop_length = 321 #@sijin any special reason for this btw
+        mel_spectrogram_window_length = 1024
+        mel_spectrogram_n_fft = 1024
+        mel_spectrogram_n_mels = 128
+
+        yinPyinMaxFreq = 300 #fundamental human about 300Hz. Rest is harmonics #self.sampling_rate/2 #nyquist
+        yinPyinMinFreq = 20 #Voide lower limit
+        yinPyinFrameLength = 200
+        yinPyinHopLength = 50
+        yinEffectivePostSR = sampling_rate/yinPyinHopLength
+
+        pYinDecimationFactor = 4
+        pYinSampleRate = sampling_rate/pYinDecimationFactor
+        pYinMaxFreq = min(300,pYinSampleRate/2)
+        pYinFrameLength = int(200/4)
+        pYinHopLength = int(50/4)
+        pYinEffectivePostSR = pYinSampleRate/pYinHopLength 
+
+
+        # Thanks @Sijin for getting us started
+        results = {}
+
+        #mel_spectrogram
+        if "mel_spectrogram" in features:
+            mel_spectrogram = librosa.feature.melspectrogram(
+                y=padded_audio_data, sr=sampling_rate, 
+                hop_length=mel_spectrogram_hop_length, 
+                n_fft=mel_spectrogram_n_fft,
+                win_length=mel_spectrogram_window_length,
+                n_mels=mel_spectrogram_n_mels,
+                ) 
+            mel_spectrogram_normalised_log_scale = librosa.amplitude_to_db(mel_spectrogram, ref=np.max)
+            results["mel_spectrogram"] = mel_spectrogram_normalised_log_scale
+        else:
+            # mel_spectrogram is mandatory
+            raise ValueError("Features: mel_spectrogram is mandatory")
+        
+        #YIN
+        if "yin" in features:
+            yin = librosa.yin(y=padded_audio_data, fmin=yinPyinMinFreq, fmax=yinPyinMaxFreq, sr=sampling_rate, frame_length=yinPyinFrameLength , hop_length=yinPyinHopLength)
+            yin_normalised = (yin - yinPyinMinFreq) / (yinPyinMaxFreq - yinPyinMinFreq)
+
+            # lowpass filter for yin
+            # sosfilt = signal.butter(2, 50, 'lp', fs=yinEffectivePostSR, output='sos')
+            # yin_normalised = signal.sosfilt(sosfilt, yin_normalised)
+            results["yin"] = yin_normalised
+        else:
+            yin_normalised = np.zeros(1)
+
+        if "pyin" in features:
+            #PYIN
+            # decimated for speed. Pyin is slow
+            resampled_forPyin = signal.decimate(padded_audio_data, pYinDecimationFactor, ftype='fir', axis=-1, zero_phase=True)
+            pyin_fundamental ,pyin_voiced, pyin_probability, =librosa.pyin(y=resampled_forPyin, fmin=yinPyinMinFreq, fmax=pYinMaxFreq, sr=pYinSampleRate, frame_length=pYinFrameLength , hop_length=pYinHopLength)
+            pyin_fundamental_no_nan = np.nan_to_num(pyin_fundamental,nan=yinPyinMinFreq) # nan_values go to minfreq
+            pyin_fundamental_normalised = (pyin_fundamental_no_nan - yinPyinMinFreq) / (pYinMaxFreq - yinPyinMinFreq)
+
+            # lowpass filter for yin
+            # sosfilt = signal.butter(2, 50, 'lp', fs=pYinEffectivePostSR, output='sos')
+            # pyin_fundamental_normalised = signal.sosfilt(sosfilt, pyin_fundamental_normalised)
+            results["pyin"] = pyin_fundamental_normalised
+        else:
+            pyin_fundamental_normalised = np.zeros(1)
+
+        return padded_audio_data, mel_spectrogram_normalised_log_scale, yin_normalised, pyin_fundamental_normalised
+
 
     def __getitem__(self, idx, for_plot=False, features_override=None):
         '''
@@ -311,93 +403,23 @@ class DatasetMichigan(Dataset):
         else:
             audio_data = read_michigan_dataset_audio(entry["filename"], sr=self.sampling_rate, mono=True)
 
+        res = self.preproccessData(audio_data,features=features, pad_audio = self.pad_audio, pad_samples = self.pad_samples, sampling_rate = self.sampling_rate)
+        padded_audio_data,mel_spectrogram_normalised_log_scale, yin_normalised, pyin_fundamental_normalised = res
 
-        if self.pad_audio:
-            padded_audio_data = np.pad(audio_data, (0, max(self.pad_samples - len(audio_data),0)), 'constant')
-        else:
-            padded_audio_data = audio_data
-
-        # pipeline parameters. refactor later
-        mel_spectrogram_hop_length = 321 #@sijin any special reason for this btw
-        mel_spectrogram_window_length = 1024
-        mel_spectrogram_n_fft = 1024
-        mel_spectrogram_n_mels = 128
-
-        yinPyinMaxFreq = 300 #fundamental human about 300Hz. Rest is harmonics #self.sampling_rate/2 #nyquist
-        yinPyinMinFreq = 20 #Voide lower limit
-        yinPyinFrameLength = 200
-        yinPyinHopLength = 50
-        yinEffectivePostSR = self.sampling_rate/yinPyinHopLength
-
-        pYinDecimationFactor = 4
-        pYinSampleRate = self.sampling_rate/pYinDecimationFactor
-        pYinMaxFreq = min(300,pYinSampleRate/2)
-        pYinFrameLength = int(200/4)
-        pYinHopLength = int(50/4)
-        pYinEffectivePostSR = pYinSampleRate/pYinHopLength 
-
-
-        # Thanks @Sijin for getting us started
-        results = {}
-
-        #mel_spectrogram
-        if "mel_spectrogram" in features:
-            mel_spectrogram = librosa.feature.melspectrogram(
-                y=padded_audio_data, sr=self.sampling_rate, 
-                hop_length=mel_spectrogram_hop_length, 
-                n_fft=mel_spectrogram_n_fft,
-                win_length=mel_spectrogram_window_length,
-                n_mels=mel_spectrogram_n_mels,
-                ) 
-            mel_spectrogram_normalised_log_scale = librosa.amplitude_to_db(mel_spectrogram, ref=np.max)
-            results["mel_spectrogram"] = mel_spectrogram_normalised_log_scale
-        else:
-            # mel_spectrogram is mandatory
-            raise ValueError("Features: mel_spectrogram is mandatory")
         
-        #YIN
-        if "yin" in features:
-            yin = librosa.yin(y=padded_audio_data, fmin=yinPyinMinFreq, fmax=yinPyinMaxFreq, sr=self.sampling_rate, frame_length=yinPyinFrameLength , hop_length=yinPyinHopLength)
-            yin_normalised = (yin - yinPyinMinFreq) / (yinPyinMaxFreq - yinPyinMinFreq)
-
-            # lowpass filter for yin
-            # sosfilt = signal.butter(2, 50, 'lp', fs=yinEffectivePostSR, output='sos')
-            # yin_normalised = signal.sosfilt(sosfilt, yin_normalised)
-            results["yin"] = yin_normalised
-        else:
-            yin_normalised = np.zeros(1)
-
-        if "pyin" in features:
-            #PYIN
-            # decimated for speed. Pyin is slow
-            resampled_forPyin = signal.decimate(padded_audio_data, pYinDecimationFactor, ftype='fir', axis=-1, zero_phase=True)
-            pyin_fundamental ,pyin_voiced, pyin_probability, =librosa.pyin(y=resampled_forPyin, fmin=yinPyinMinFreq, fmax=pYinMaxFreq, sr=pYinSampleRate, frame_length=pYinFrameLength , hop_length=pYinHopLength)
-            pyin_fundamental_no_nan = np.nan_to_num(pyin_fundamental,nan=yinPyinMinFreq) # nan_values go to minfreq
-            pyin_fundamental_normalised = (pyin_fundamental_no_nan - yinPyinMinFreq) / (pYinMaxFreq - yinPyinMinFreq)
-
-            # lowpass filter for yin
-            # sosfilt = signal.butter(2, 50, 'lp', fs=pYinEffectivePostSR, output='sos')
-            # pyin_fundamental_normalised = signal.sosfilt(sosfilt, pyin_fundamental_normalised)
-            results["pyin"] = pyin_fundamental_normalised
-        else:
-            pyin_fundamental_normalised = np.zeros(1)
-
         # labels 
         word = entry["word"]
         toneclass = entry["toneclass"]
 
         if for_plot:
             return padded_audio_data,mel_spectrogram_normalised_log_scale, yin_normalised, pyin_fundamental_normalised, word, toneclass
-            # out = [x[1] for x in results.items()] + [word, toneclass]
-            # return out
         else:
             mel_spectrogram_normalised_log_scale_torch = torch.from_numpy(mel_spectrogram_normalised_log_scale)
             yin_normalised_torch = torch.from_numpy(yin_normalised)
             pyin_normalised_torch = torch.from_numpy(pyin_fundamental_normalised)
 
             return mel_spectrogram_normalised_log_scale_torch, yin_normalised_torch, pyin_normalised_torch, word, toneclass
-            # out = [torch.from_numpy(x[1]) for x in results.items()] + [word, toneclass]
-            # return out
+
         
     def plot_item(self, idx):
         """
