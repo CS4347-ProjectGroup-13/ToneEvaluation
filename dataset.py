@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from utils import read_json, save_json, ls, jpath
 import sklearn.model_selection
 import librosa
+import tarfile
 
 
 def move_data_to_device(data, device):
@@ -170,8 +171,6 @@ def read_michigan_dataset_index(data_root=os.path.join(os.getcwd(),"data_full"))
     return pd.DataFrame.from_records(data=audioData, columns=["participantID", "word", "toneclass", "filename",'xml_fn'])
 
 
-
-
 def read_michigan_dataset_audio(filename, 
                                 data_root=os.path.join(os.getcwd(),"data_full"),
                                 sr=16000,
@@ -190,7 +189,6 @@ def read_michigan_dataset_audio(filename,
     """
     filepath = os.path.join(data_root, 'michigan', 'tone_perfect_all_mp3', 'tone_perfect', filename)
     return librosa.load(filepath, sr=sr, mono=mono)[0]
-
 
 def load_presegmented_audio_index(
         data_root=os.path.join(os.getcwd(),"data_full"),
@@ -211,8 +209,6 @@ def load_presegmented_audio_index(
     audio_index = os.path.join(data_root, 'saved_segmentations', cache_name, "segementations.pkl")
     meta_data = os.path.join(data_root, 'saved_segmentations', cache_name, "meta_data.json")
     return audio_index,meta_data
-
-
 
 class DatasetMichigan(Dataset):
     """
@@ -299,6 +295,7 @@ class DatasetMichigan(Dataset):
                 - yin_normalised (numpy.ndarray): The normalized YIN pitch estimation.
                 - pyin_fundamental_normalised (numpy.ndarray): The normalized PYIN pitch estimation.
         """
+        
         if pad_audio:
             padded_audio_data = np.pad(audio_data, (0, max(pad_samples - len(audio_data),0)), 'constant')
         else:
@@ -445,7 +442,7 @@ class DatasetMichigan(Dataset):
         plt.show()
 
 
-def get_data_loader_michigan(args, test_size = 0.2, split_individual = False):
+def get_data_loader_michigan(args, test_size = 0.2, split_individual = False, test_speakers = {"FV1","MV1"}):
     """
     Returns train and test data loaders for the Michigan dataset.
 
@@ -477,9 +474,13 @@ def get_data_loader_michigan(args, test_size = 0.2, split_individual = False):
         train_index = index.iloc[train_ids]
         test_index = index.iloc[test_ids]
     else:
-        filter_by_speaker = index["participantID"].isin({"FV1","MV1"})
+        filter_by_speaker = index["participantID"].isin(test_speakers)
         test_index = index[filter_by_speaker]
         train_index =  index[~filter_by_speaker]
+        trainSpeakers = train_index["participantID"].unique()
+
+        print(f"Splitting by speaker Test:{test_speakers} Train:{trainSpeakers}")
+
 
     train_ds = DatasetMichigan(
         dataset_index=train_index, 
@@ -652,6 +653,33 @@ def read_aidatatang_index(data_root=os.path.join(os.getcwd(),"data_full")):
     df["folder"] = df.apply(get_category, axis=1)
     return df
 
+def read_aidatatang_data(participantID, sentenceID):
+
+    fullFileName = f"T0055{participantID}{sentenceID}"
+    data_root=os.path.join(os.getcwd(),"data_full")
+    makePath = lambda x,y: os.path.join(data_root, 'aidatatang', 'corpus', x, f"{y}.tar.gz")
+    subfolders = ["dev","test","train"]
+    possiblePaths = [makePath(subfolder,participantID) for subfolder in subfolders]
+
+    zipped_path = [path for path in possiblePaths if os.path.exists(path)][0]
+
+    
+    suffixed = {
+        'AudioData': (".wav",lambda x: librosa.load(x, sr = 16000, mono=True)[0]) ,
+        "MetaData": (".txt", lambda x: tuple(extract_pinyin(x.read().decode("utf-8")))), 
+        "Transcript": (".trn", lambda x: x.read().decode("utf-8"))
+        }
+
+    with tarfile.open(zipped_path, 'r',) as tar_ref:
+
+        data = {}
+        for suf in suffixed.items():
+            file_to_extract = f"./{participantID}/{fullFileName}{suf[1][0]}"
+            tar_ref.extractfile(file_to_extract)
+            data[suf[0]] = suf[1][1](tar_ref.extractfile(file_to_extract))
+        
+    return data
+
 class PhomemeLibrary():
     def __init__(self, audio_source = ("michigan", "MV1"), keep_loaded = True) -> None:
 
@@ -750,7 +778,8 @@ class FusedSentenceMichigan(Dataset):
                     audio_source = ("michigan", "MV1"),
                     overlaps = [4000],
                     random_seed = 1234,
-                    dataset_size = 500
+                    dataset_size = 500,
+                    use_real_data = False
                     ):
         
         self.properties = {
@@ -764,7 +793,8 @@ class FusedSentenceMichigan(Dataset):
             "audio_source": audio_source,
             "overlaps": overlaps,
             "random_seed": random_seed,
-            "dataset_size": dataset_size
+            "dataset_size": dataset_size,
+            "use_real_data": use_real_data
         }
 
         
@@ -777,6 +807,7 @@ class FusedSentenceMichigan(Dataset):
 
         self.PhomemeLibrary = PhomemeLibrary(audio_source=audio_source,keep_loaded=True)
         self.overlaps = overlaps
+        self.use_real_data = use_real_data
 
 
         sentence_index_overall = read_aidatatang_index()
@@ -805,10 +836,20 @@ class FusedSentenceMichigan(Dataset):
 
         sentence = self.sentenceIndex.iloc[idx]["transcript"]
         toneClasses = self.sentenceIndex.iloc[idx]["toneclass"]
-        audio_data_list, words = self.PhomemeLibrary.getSentence(sentence)
-        combinedAudio, delimiters = self.PhomemeLibrary.mix_audio(audio_data_list, overlap=self.overlaps[0])
-        audio_data = combinedAudio
-        originallen = len(toneClasses)
+
+        if self.use_real_data:
+            participantID = self.sentenceIndex.iloc[idx]["participantID"]
+            sentenceID	= self.sentenceIndex.iloc[idx]["sentenceID"]
+            audio_data  = read_aidatatang_data(participantID, sentenceID)["AudioData"][0:self.pad_samples]
+            delimiters = [int(len(audio_data)/(len(toneClasses)+1)*x) for x in range(len(toneClasses)+1)]
+            originallen = len(toneClasses)
+
+        else:
+            audio_data_list, words = self.PhomemeLibrary.getSentence(sentence)
+            combinedAudio, delimiters = self.PhomemeLibrary.mix_audio(audio_data_list, overlap=self.overlaps[0])
+            audio_data = combinedAudio
+            originallen = len(toneClasses)
+
         if self.pad_audio:
             padded_audio_data = np.pad(audio_data, (0, max(self.pad_samples - len(audio_data),0)), 'constant')
             toneClasses = np.pad(toneClasses,(0, max(10-originallen,0)), 'constant')
@@ -943,9 +984,24 @@ def split_audio_by_segmentation(audio, delimiters_time, signal_end):
     final_set = delimiters_time + [signal_end]
     return [audio[delimiters[i]:delimiters[i+1]] for i in range(len(delimiters)-1)]
 
+
+def single_segmentation(audio,originallen = 10):
+    processor, model = load_segmentation_model()
+    model = model.to("cuda")
+    audio = torch.unsqueeze(audio, dim=0)
+    print(audio.shape)
+    segmentations = get_segmentations(processor, model, audio)
+    predictions, transcription = segmentations
+    predictions = predictions.cpu()
+    timelimit_end = librosa.samples_to_time(len(audio), sr=16000)
+    # segementation_times = process_segmentation_results(predictions, originallen, timelimit_end)
+
+    return  predictions, transcription
+
+
 def run_segmentation(dataset = None):
     processor, model = load_segmentation_model()
-    test_data_loader = DataLoader(dataset, batch_size=32, pin_memory=True)
+    test_data_loader = DataLoader(dataset, batch_size=16, pin_memory=True)
     dataset_properties = dataset.get_properties()
 
     model = model.to("cuda")
@@ -981,10 +1037,18 @@ def shallow_concat(x):
     _ = [new_x.extend(y) for y in x]
     return new_x
 
-def get_alignment(x):
+def get_alignment(x, real=False):
     wc = x["word_count"]
     seg = sorted(x["segementation_times_results"], reverse=False)
     gt = x["delimiter_time_results"]
+    
+    if real:
+        d ={
+            "diffs":0,
+            "mappingArray": [x for x in range(wc)],
+        }
+        return pd.Series(d)
+
     if len(seg) == wc:
         d ={
             "diffs":np.mean([abs(gt[i] - seg[i]) for i in range(wc)]),
@@ -1026,8 +1090,11 @@ def get_alignment(x):
         "mappingArray": mapping_array2,
     }
     return pd.Series(d)
-    
-def processes_segementation_results_global(segmentation_Results):
+
+def transcription_to_pinyin(transcription_str):
+    return pinyin.get(transcription_str, format="numerical", delimiter="_").split("_")
+
+def processes_segementation_results_global(segmentation_Results, real=False):
     sentence_results, transcription_results, segementation_times_results, delimiter_time_results,audioData= segmentation_Results
     sentence_results = shallow_concat(sentence_results, )
     transcription_results = shallow_concat(transcription_results)
@@ -1046,6 +1113,9 @@ def processes_segementation_results_global(segmentation_Results):
         # "delimiter_time_results": delimiter_time_results
     }
     df = pd.DataFrame.from_dict(d)
+    
+    df["transcription_results"] = df["transcription_results"].apply(lambda x: transcription_to_pinyin(x))
+
 
     word_count = df["sentence_results"].apply(lambda x: len(x.split("_")))
     df["word_count"] = word_count
@@ -1056,9 +1126,13 @@ def processes_segementation_results_global(segmentation_Results):
     df["delimiter_time_results"] = [[]]*ds_len
     df["delimiter_time_results"] = delimiter_time_results
 
+    # if real:
+        # df["delimiter_time_results"] = segementation_times_results
+
     df["diff"] = df.apply(lambda x: x["word_count"] - len(x["segementation_times_results"]), axis=1)
 
-    df[["err","mappings"]] = df.apply(get_alignment, axis=1)
+    ga = lambda x:get_alignment(x, real=real)
+    df[["err","mappings"]] = df.apply(ga, axis=1)
 
 
     aud_df = pd.DataFrame()

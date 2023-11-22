@@ -27,15 +27,15 @@ class Hparams_michigan:
         'dataset_root': os.path.join(os.getcwd(), 'data_full'),
         'sampling_rate': 16000,
         'sample_length': 1.5,  # 1.5 second samples
-        'num_workers': 4,  # Number of additional thread for data loading. A large number may freeze your laptop.
+        'num_workers': 0,  # Number of additional thread for data loading. A large number may freeze your laptop.
         'preload_audio': False,
         'pad_audio': True,
         'features':{
             "mel_spectrogram": {},
-            "yin": {},
+            # "yin": {},
             # "pyin": {},
         },
-
+        'test_speakers': ['MV1'],
         'batch_size': 32,
     }
 

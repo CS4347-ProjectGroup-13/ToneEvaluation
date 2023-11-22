@@ -1,0 +1,16 @@
+Result Log for Segementation Experiments:
+
+===================================================
+Experiment Segementation on Real Data. 500 samples
+
+Count Differences
+0    441
+1     50
+2      7
+3      2
+
+Count Differences Norm
+0    0.882
+1    0.100
+2    0.014
+3    0.004

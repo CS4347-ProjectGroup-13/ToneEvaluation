@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Chinese Textbox</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
+    <script src="https://unpkg.com/pinyin-pro" type="module"></script>
+    <script src="{{url_for('static', filename='stuff.js')}}"></script>
+</head>
+<body>
+    <section class="section">
+        <div class="container">
+            <h2 class="subtitle">Instructions</h2>
+            <p>Placeholder text goes here...</p>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h1 class="title">What Would you like to say</h1>
+            <div class="field">
+                <div class="control">
+                    <input class="input is-large" type="text" id="chineseInput" placeholder="Type Chinese letters here" style="width: 100%; font-size: 24px;" value="你好">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <div class="columns">
+                <div class="columns is-gapless is-multiline">
+                    <div class="column is-narrow"style="margin-left: 10px;">
+                        <h1 class="title">PinYin</h1>
+                    </div>
+                    <div class="column is-narrow" style="margin-left: 10px;">
+                        <button id="playButton" class="button is-primary">
+                            <span class="icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-play">
+                                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="hanyu" style="font-size: 32px; font-weight: bold;"></div>
+                <!-- Display Mandarin Chinese characters here -->
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <div class="columns">
+                <div class="columns is-gapless is-multiline">
+                    <div class="column is-narrow"style="margin-left: 10px;">
+                        <h1 class="title">Your Turn! Record -></h1>
+                    </div>
+                    <div class="column is-narrow " style="margin-left: 10px;">
+                        <button id="recBtn" class="button is-primary has-background-danger">
+                            <span class="icon">
+                                <svg id="recbtnMiddle" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" stroke="none" class="feather feather-play" style="border-radius: 50%;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                </svg>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    
+</body>
+<script>
+    window.onload = function() {
+        const pinyin = window.pinyinPro.pinyin;
+        console.log(pinyin);
+        const chineseInput = document.getElementById('chineseInput');
+        const mandarinCharacters = document.getElementById('hanyu');
+
+        function addHanyuPinyin() {
+            const chineseText = chineseInput.value;
+            const hanyuPinyin = convertToHanyuPinyin(chineseText);
+            mandarinCharacters.textContent = hanyuPinyin;
+        }
+
+        function convertToHanyuPinyin(chineseText) {
+            const hanyuPinyin = pinyin(chineseText)
+            return hanyuPinyin;
+        }
+
+        chineseInput.addEventListener('input', addHanyuPinyin);
+
+        function speakMandarin(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'zh-CN'; 
+            speechSynthesis.speak(utterance);
+                }
+                
+        const playButton = document.getElementById('playButton');
+
+        playButton.addEventListener('click', function() {
+            const mandarinText = mandarinCharacters.textContent;
+            speakMandarin(mandarinText);
+        });
+
+
+        function toggleRecbtnMiddleFill() {
+            const recbtnMiddle = document.getElementById('recbtnMiddle');
+            const rec = RECORDER
+            
+            if (recbtnMiddle.style.fill === 'red') {
+                rec.stopRecording()
+                const blib = rec.getRecording()
+                console.log(blib)
+                recbtnMiddle.style.fill = 'white';
+            } else {
+                rec.startRecording()
+                recbtnMiddle.style.fill = 'red';
+            }
+        }
+
+        const recButton = document.getElementById('recBtn');
+        recButton.addEventListener('mouseup', toggleRecbtnMiddleFill);
+
+
+        };
+</script>
+
+
+</html>
