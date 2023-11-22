@@ -477,6 +477,22 @@ def read_synthesized_michigan_dataset_audio(filename,
     filepath = os.path.join(data_root, data_type, filename)
     return librosa.load(filepath, sr=sr, mono=mono)[0]
 
+def synthesized_collate_fn(batch):
+    mel_spectrogram = []
+    onset_rolls = []
+    offset_rolls = []
+
+    for sample in batch:
+        mel_spectrogram.append(sample[0])
+        onset_rolls.append(sample[1])
+        offset_rolls.append(sample[2])
+
+    mel_spectrogram = torch.stack(mel_spectrogram)
+    onset_rolls = torch.stack(onset_rolls)
+    offset_rolls = torch.stack(offset_rolls)
+
+    return mel_spectrogram, onset_rolls, offset_rolls
+
 class DatasetMichiganSynthesized(Dataset):
     """
     A class representing a dataset of synthesized audio files.
@@ -500,14 +516,15 @@ class DatasetMichiganSynthesized(Dataset):
         pad_samples (int): The number of samples to pad audio files to.
         preload_audio (bool): Whether to preload all audio files into memory.
         pad_audio (bool): Whether to pad audio files to a fixed length.
-        indexData (pandas.DataFrame): A DataFrame containing metadata about the audio files in the dataset.
+        indexData (dict): A Dictionary containing metadata about the audio files in the dataset.
+        audioData (dict): A Dictionary containing audio data (if preload_audio is True).
 
     Methods:
-        read_michigan_dataset_index: Reads the dataset index from disk.
-        read_michigan_dataset_audio: Reads an audio file from disk.
+        read_synthesized_michigan_dataset_index: Reads the dataset index from disk.
+        read_synthesized_michigan_dataset_audio: Reads an audio file from disk.
 
     Examples:
-        >>> dataset = Dataset(dataset_root="./data_full", dataset_index=index_df, preload_audio=True)
+        >>> dataset = Dataset(dataset_root="./data_synthesized", dataset_index=index_df, preload_audio=True)
     """
     def __init__(self, 
                     data_type,
@@ -517,7 +534,7 @@ class DatasetMichiganSynthesized(Dataset):
                     preload_audio = True,
                     pad_audio = True,
                     sample_length = 10,
-                    pipelineOptions = {} #for future iterations
+                    pipelineOptions = {}
                     ):
         
         self.data_type = data_type
@@ -526,6 +543,12 @@ class DatasetMichiganSynthesized(Dataset):
         self.pad_samples = librosa.time_to_samples(sample_length, sr=sampling_rate)
         self.preload_audio = preload_audio
         self.pad_audio = pad_audio
+        self.sample_length = sample_length
+
+        self.frame_per_sec = pipelineOptions.get('frame_per_sec', 50)
+        self.window_length = pipelineOptions.get('window_length', 1024)
+        self.n_fft = pipelineOptions.get('n_fft', 1024)
+        self.n_mels = pipelineOptions.get('n_mels', 128)
 
         if dataset_index is None:
             raise ValueError("dataset_index must be specified. Call read_synthesized_michigan_dataset_index()")
@@ -535,14 +558,14 @@ class DatasetMichiganSynthesized(Dataset):
         if preload_audio:
             self.audioData = {}
             for filename in self.indexData:
-                self.audioData[filename] = read_synthesized_michigan_dataset_audio(filename, data_type=self.data_type, sr=self.sampling_rate, mono=True)
+                self.audioData[filename] = read_synthesized_michigan_dataset_audio(filename, data_type=self.data_type, data_root=self.dataset_root, sr=self.sampling_rate, mono=True)
 
     def __len__(self):
         return len(self.indexData)
 
     def __getitem__(self, idx, for_plot=False):
         '''
-        Return spectrogram and 4 labels of an audio clip
+        Return spectrogram and onset/offset labels of an audio clip
 
         Parameters:
         -----------
@@ -552,21 +575,14 @@ class DatasetMichiganSynthesized(Dataset):
         --------
             mel_spectrogram_normalised_log_scale_torch : torch.Tensor
                 The normalized log-scale mel spectrogram of the audio clip, as a PyTorch tensor.
-            yin_normalised_torch : torch.Tensor
-                The normalized YIN pitch estimate of the audio clip, as a PyTorch tensor.
-            pyin_normalised_torch : torch.Tensor
-                The normalized fundamental frequency estimate of the audio clip, obtained using the PYIN algorithm, as a PyTorch tensor.
-            word : str
-                The word spoken in the audio clip.
-            toneclass : str
-                The tone class of the word spoken in the audio clip.
+
         '''
         filename = f'{self.data_type}_{idx + 1}.mp3'
 
         if self.preload_audio:
             audio_data = self.audioData[filename]
         else:
-            audio_data = read_michigan_dataset_audio(filename, data_type=self.data_type, sr=self.sampling_rate, mono=True)
+            audio_data = read_synthesized_michigan_dataset_audio(filename, data_type=self.data_type, data_root=self.dataset_root, sr=self.sampling_rate, mono=True)
 
         if self.pad_audio:
             padded_audio_data = np.pad(audio_data, (0, max(self.pad_samples - len(audio_data),0)), 'constant')
@@ -574,10 +590,10 @@ class DatasetMichiganSynthesized(Dataset):
             padded_audio_data = audio_data
 
         # pipeline parameters. refactor later
-        mel_spectrogram_hop_length = 321
-        mel_spectrogram_window_length = 1024
-        mel_spectrogram_n_fft = 1024
-        mel_spectrogram_n_mels = 128
+        mel_spectrogram_hop_length = (self.sampling_rate // self.frame_per_sec)
+        mel_spectrogram_window_length = self.window_length
+        mel_spectrogram_n_fft = self.n_fft
+        mel_spectrogram_n_mels = self.n_mels
 
         #mel_spectrogram
         mel_spectrogram = librosa.feature.melspectrogram(
@@ -593,9 +609,37 @@ class DatasetMichiganSynthesized(Dataset):
             return padded_audio_data, mel_spectrogram_normalised_log_scale
         else:
             mel_spectrogram_normalised_log_scale_torch = torch.from_numpy(mel_spectrogram_normalised_log_scale)
-            return mel_spectrogram_normalised_log_scale_torch, self.indexData[filename]
+            onset_roll, offset_roll = self.get_labels(self.indexData[filename])
+            return mel_spectrogram_normalised_log_scale_torch, onset_roll, offset_roll
 
-def get_data_loader_synthesized_michigan(args):
+    def get_labels(self, labels):
+        frame_num = math.ceil(self.sample_length * self.frame_per_sec)
+
+        onset_roll = torch.zeros(size=(frame_num + 1,), dtype=torch.long)
+        offset_roll = torch.zeros(size=(frame_num + 1,), dtype=torch.long)
+
+        def process_data(data):
+            tone, onset, offset = data
+            onset_idx = math.floor(onset * self.frame_per_sec)
+            offset_idx = math.floor(offset * self.frame_per_sec)
+
+            return onset_idx, offset_idx
+        
+        labels_processed = np.array(list(map(process_data, labels)))
+        onset_idxs = labels_processed[:, 0].astype(int) 
+        offset_idxs = labels_processed[:, 1].astype(int)
+
+        onset_roll[onset_idxs] = 1
+        offset_roll[offset_idxs] = 1
+
+        counts = offset_idxs - onset_idxs + 1
+        idx = np.ones(counts.sum(), dtype=int)
+        idx[np.cumsum(counts)[:-1]] -= counts[:-1]
+        idx = np.cumsum(idx) - 1 + np.repeat(onset_idxs, counts)
+
+        return onset_roll, offset_roll
+
+def get_data_loader_synthesized_michigan(args, pipelineOptions):
     """
     Returns train and test data loaders for the synthesized versions of the Michigan dataset.
 
@@ -616,25 +660,29 @@ def get_data_loader_synthesized_michigan(args):
             - data_loader_train (DataLoader): The training data loader.
             - data_loader_test (DataLoader): The testing data loader.
     """
-    train_index = read_synthesized_michigan_dataset_index(data_type='train')
-    test_index = read_synthesized_michigan_dataset_index(data_type='test')
+    train_index = read_synthesized_michigan_dataset_index(data_type='train', data_root=args['dataset_root'])
+    test_index = read_synthesized_michigan_dataset_index(data_type='test', data_root=args['dataset_root'])
 
-    train_ds = DatasetMichigan(
-        dataset_index=train_index, 
+    train_ds = DatasetMichiganSynthesized(
+        dataset_index=train_index,
+        data_type='train',
         dataset_root=args['dataset_root'], 
         sampling_rate=args['sampling_rate'], 
         preload_audio=args['preload_audio'],
         sample_length=args['sample_length'],
         pad_audio=args['pad_audio'],
+        pipelineOptions=pipelineOptions
         )
     
-    test_ds = DatasetMichigan(
+    test_ds = DatasetMichiganSynthesized(
         dataset_index=test_index, 
+        data_type='test',
         dataset_root=args['dataset_root'], 
         sampling_rate=args['sampling_rate'], 
         preload_audio=args['preload_audio'],
         sample_length=args['sample_length'],
         pad_audio=args['pad_audio'],
+        pipelineOptions=pipelineOptions
         )
     
     data_loader_train = DataLoader(
@@ -643,6 +691,7 @@ def get_data_loader_synthesized_michigan(args):
         num_workers=args['num_workers'],
         pin_memory=True,
         shuffle=True,
+        collate_fn=synthesized_collate_fn
     )
     data_loader_test = DataLoader(
         test_ds,
@@ -650,5 +699,6 @@ def get_data_loader_synthesized_michigan(args):
         num_workers=args['num_workers'],
         pin_memory=True,
         shuffle=True,
+        collate_fn=synthesized_collate_fn
     )
     return train_ds, test_ds , data_loader_train, data_loader_test
