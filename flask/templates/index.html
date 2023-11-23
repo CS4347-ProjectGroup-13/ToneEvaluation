@@ -12,8 +12,16 @@
 <body>
     <section class="section">
         <div class="container">
-            <h2 class="subtitle">Instructions</h2>
-            <p>Placeholder text goes here...</p>
+            <h2 class="title">Instructions</h2>
+            <p class="content">This application is designed to help you learn and practice Mandarin Chinese pronunciation. Simply enter the text you want to learn to pronounce with correct tones, and the application will provide you with an ASR (Automatic Speech Recognition) pronunciation. You can listen to the pronunciation by clicking the green button. When you're ready, you can start recording your own pronunciation by clicking the red button. The application will then compare your pronunciation with the correct tones and display the results. Correctly pronounced tones will be highlighted in green, while incorrect tones will be highlighted in red. It's a great tool to improve your Mandarin Chinese pronunciation skills!</p>
+            <div class="content">
+                <ol>
+                    <li>Enter the text you want to learn to pronounce TONE in the input box below.</li>
+                    <li>Click the green button to listen to the ASR pronunciation of the text.</li>
+                    <li>When you are ready, click the red button to start recording. Try to pronounce the words.</li>
+                    <li>The results will be displayed. Green indicates correct TONE pronunciation, while red indicates incorrect TONE pronunciation.</li>
+                </ol>
+            </div>
         </div>
     </section>
 
@@ -69,6 +77,10 @@
                         </button>
                     </div>
                 </div>
+            </div>
+            <h2 class="subtitle">results</h2>
+            <div id="hanyureply" style="font-size: 32px; font-weight: bold;"></div>
+                <!-- Display Mandarin Chinese characters here -->
             </div>
         </div>
     </section>

@@ -87,11 +87,16 @@ class MicrophoneRecorder {
         reader.onloadend = () => {
             // Get the base64 string
             const base64String = reader.result.split(',')[1];
+            const chineseInput = document.getElementById('chineseInput').value;
+            const mandarinCharacters = document.getElementById('hanyureply');
 
             // Send the base64 string to the current endpoint using a POST request
             fetch(currentEndpoint, {
                 method: 'POST',
-                body: JSON.stringify({ audio: base64String }),
+                body: JSON.stringify({ 
+                    audio: base64String,
+                    text:chineseInput,
+                }),
                 headers: {
                     'Content-Type': 'application/json'
                 }
@@ -106,6 +111,45 @@ class MicrophoneRecorder {
             })
             .then(data => {
                 console.log('Response:', data); // Log the response data
+                const transcript = data.transcription
+                const pinyin = window.pinyinPro.pinyin;
+
+                const original_words = chineseInput
+                const original_pinyin = pinyin(original_words, { toneType: 'num', type: 'array' });
+                const pinyinArray = pinyin(transcript, { type: 'array' });
+                const pinyinArray2 = pinyin(transcript, { toneType: 'num', type: 'array' });
+
+                var mask = []
+
+                for (let i = 0; i < pinyinArray2.length; i++) {
+                    //if we excced the len of either array, break
+                    if (i >= original_pinyin.length || i >= pinyinArray2.length) {
+                        break;
+                    }
+                    const letter1 = pinyinArray2[i].slice(-1); // Get the last letter of pinyinArray2[i]
+                    const letter2 = original_pinyin[i].slice(-1); // Get the last letter of original_pinyin[i]
+                    console.log(letter1, letter2);
+                    
+                    if (letter1 === letter2) {
+                        console.log(`Letter ${i + 1} matches: ${letter1}`);
+                        mask.push(true);
+                    } else {
+                        console.log(`Letter ${i + 1} does not match: ${letter1}`);
+                        mask.push(false);
+                    }
+                }
+                
+                mandarinCharacters.innerHTML = ''; // Clear the container before adding new characters
+
+                for (let i = 0; i < mask.length; i++) {
+                    const character = pinyinArray[i];
+                    const characterElement = document.createElement('span');
+                    characterElement.textContent = character + ' '; // Add a space after each character
+                    characterElement.style.color = mask[i] ? 'green' : 'red'; // Set the color based on the mask value
+                    mandarinCharacters.appendChild(characterElement);
+                }
+
+
             })
             .catch(error => {
                 console.error('Error sending base64 string:', error);

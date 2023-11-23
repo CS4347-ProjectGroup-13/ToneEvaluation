@@ -51,18 +51,23 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload():
+    j = request.get_json()
 
-    # audio = request.get_json()['audio']
-    # base64_audio = base64.b64decode(audio)
-    # buffer = io.BytesIO(base64_audio)
+    audio = j['audio']
+    text = j['text']
+    print(text, len(text))
+    base64_audio = base64.b64decode(audio)
+    buffer = io.BytesIO(base64_audio)
+    aud,sr = librosa.load(buffer, sr = 16000,mono=True)
+
+
     # write buffer to file
     # with open('audio.wav', 'wb') as f:
     #     f.write(base64_audio)
-    #     f.close()
-    # aud,sr = librosa.load(buffer, sr = 16000)
-    aud,sr = librosa.load("audio.wav", sr = 16000, mono=True)
+    #     f.close()    
+    # aud,sr = librosa.load("audio.wav", sr = 16000, mono=True)
     
-    predictions, transcription,times = run_segmentation(aud,MODEL_SEGMENT,PROCESSOR_SEGMENT)
+    predictions, transcription,times = run_segmentation(aud,MODEL_SEGMENT,PROCESSOR_SEGMENT, original_len =  len(text))
     pyn = pinyin.get(transcription[0], format="numerical", delimiter=" ")
     d = {
         "transcription": transcription[0],
@@ -73,4 +78,4 @@ def upload():
     return json.dumps(d)
 
 if __name__ == '__main__':
-    app.run( port=12345)
+    app.run( port=5001)

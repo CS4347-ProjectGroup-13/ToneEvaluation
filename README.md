@@ -27,10 +27,20 @@ Data not included in repository. Must be Downloaded.
  ┃ ┃ ┗ 📂tone_perfect_all_xml
 ```
 
+# Install
+Run the following commands. Yes, we mixed package managers. Its research Code. 
+Pip Freeze/requirements files are a lot less reliable across wildly different machines. Especially with pytorch and cuda versions
+Installing from command line seem to be much less of a headache than deconflicting versions, since it resolves dependencies locally and in order
+Assumes you have both mamba and pip installed. If you are missing a module later on, just pip or mamba install it.
+
+-mamba install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+-mamba install pandas tqdm scikit-learn matplotlib flask transformers chardet
+-pip install pinyin
 
 # Definition of Tone in Mandarin (for this project + baseline):
-- Five Tone classes starting at Class-Index 1: ā,á,ǎ,à,a. 
-- Class-Index 0: denotes no word in that slot
+- Four Main Tone classes ā,á,ǎ,à
+- One Neutral Tone class (unused) a 
+
 
 # Baseline Model: Tone Classification:
 - Input: segmented audio clip. Fixed(padded) length. Contains only one word
