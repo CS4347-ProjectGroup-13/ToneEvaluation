@@ -893,11 +893,11 @@ def load_segmentation_model():
     model = Wav2Vec2ForCTC.from_pretrained(MODEL_ID)
     return processor, model
 
-def get_segmentations(processor, model, batch_input_audio):
+def get_segmentations(processor, model, batch_input_audio, DEVICE = "cuda"):
     # proccessed = processor(batch_input_audio, sampling_rate=16000, return_tensors="pt", padding=True).input_values
     proccessed = processor(batch_input_audio, return_tensors="pt",sampling_rate=16000).input_values
     proccessed = torch.squeeze(proccessed, dim=(0,1)) 
-    proccessed = proccessed.to("cuda")
+    proccessed = proccessed.to(DEVICE)
 
 
     with torch.no_grad():
@@ -985,26 +985,43 @@ def split_audio_by_segmentation(audio, delimiters_time, signal_end):
     return [audio[delimiters[i]:delimiters[i+1]] for i in range(len(delimiters)-1)]
 
 
-def single_segmentation(audio,originallen = 10):
+def single_segmentation(audio,originallen = 10, DEVICE = "cuda"):
     processor, model = load_segmentation_model()
-    model = model.to("cuda")
+    model = model.to(DEVICE)
     audio = torch.unsqueeze(audio, dim=0)
-    print(audio.shape)
-    segmentations = get_segmentations(processor, model, audio)
+    segmentations = get_segmentations(processor, model, audio, DEVICE = DEVICE)
     predictions, transcription = segmentations
     predictions = predictions.cpu()
     timelimit_end = librosa.samples_to_time(len(audio), sr=16000)
-    # segementation_times = process_segmentation_results(predictions, originallen, timelimit_end)
+    segementation_times = process_segmentation_results(predictions, originallen, timelimit_end)
 
     return  predictions, transcription
 
+def single_segmentation_no_load(audio, processor, model,originallen = 10, DEVICE = "cuda"):
+    audio = torch.unsqueeze(audio, dim=0)
+    audio = torch.unsqueeze(audio, dim=0)
 
-def run_segmentation(dataset = None):
-    processor, model = load_segmentation_model()
+    print(audio.shape)
+    segmentations = get_segmentations(processor, model, audio, DEVICE = DEVICE)
+    predictions, transcription = segmentations
+    predictions = predictions.cpu()
+    timelimit_end = torch.tensor([librosa.samples_to_time(audio.shape[-1], sr=16000)])
+    originallen = torch.tensor([originallen])
+    print(transcription)
+    print(originallen.shape)
+    print(originallen[0])
+    print(timelimit_end,audio.shape[-1])
+    segementation_times = process_segmentation_results(predictions, originallen, timelimit_end)
+
+    return  predictions, transcription,segementation_times
+
+
+def run_segmentation(dataset = None, DEVICE = "cuda"):
+    processor, model = load_segmentation_model(DEVICE = DEVICE)
     test_data_loader = DataLoader(dataset, batch_size=16, pin_memory=True)
     dataset_properties = dataset.get_properties()
 
-    model = model.to("cuda")
+    model = model.to(DEVICE)
 
 
     sentence_results = []
@@ -1017,7 +1034,7 @@ def run_segmentation(dataset = None):
     for batch_id, batch in enumerate(tqdm(test_data_loader)):
         mel_spectrogram_normalised_log_scale, toneClasses, combinedAudio, sentence, delimiter_time, timelimit_start, timelimit_end, originallen = batch
 
-        segmentations = get_segmentations(processor, model, combinedAudio)
+        segmentations = get_segmentations(processor, model, combinedAudio, DEVICE = DEVICE)
         predictions, transcription = segmentations
         predictions = predictions.cpu()
         segementation_times = process_segmentation_results(predictions, originallen, timelimit_end)
