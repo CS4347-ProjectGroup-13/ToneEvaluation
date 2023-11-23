@@ -5,7 +5,9 @@
     <title>Chinese Textbox</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
     <script src="https://unpkg.com/pinyin-pro" type="module"></script>
+    <script src="{{url_for('static', filename='WebAudioRecorder.min.js')}}"></script>
     <script src="{{url_for('static', filename='stuff.js')}}"></script>
+
 </head>
 <body>
     <section class="section">
@@ -114,8 +116,7 @@
             
             if (recbtnMiddle.style.fill === 'red') {
                 rec.stopRecording()
-                const blib = rec.getRecording()
-                console.log(blib)
+                // const blib = rec.getRecording()
                 recbtnMiddle.style.fill = 'white';
             } else {
                 rec.startRecording()
