@@ -1,0 +1,13 @@
+====TEST RESULTS  ====  
+Split Test Loss, Accuracy: Loss 1.0003 | Accuracy 0.7395
+              precision    recall  f1-score   support
+
+           0     0.8438    0.9515    0.8944       846
+           1     0.9816    0.8103    0.8878       659
+           2     0.9339    0.2006    0.3302      1057
+           3     0.6258    0.9559    0.7564      1587
+
+    accuracy                         0.7395      4149
+   macro avg     0.8463    0.7296    0.7172      4149
+weighted avg     0.8053    0.7395    0.6968      4149
+

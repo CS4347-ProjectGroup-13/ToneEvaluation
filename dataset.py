@@ -16,14 +16,20 @@ import sklearn.model_selection
 import librosa
 import tarfile
 
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
+import librosa.display
+import pinyin
 
+
+## OLD STUFF DEPRECATED BEGIN##
 def move_data_to_device(data, device):
     ret = []
     for i in data:
         if isinstance(i, torch.Tensor):
             ret.append(i.to(device))
     return ret
-
 
 def get_data_loader(split, args, fns=None):
     dataset = MyDataset(
@@ -44,7 +50,6 @@ def get_data_loader(split, args, fns=None):
         collate_fn=collate_fn,
     )
     return data_loader
-
 
 def collate_fn(batch):
     '''
@@ -147,10 +152,21 @@ class MyDataset(Dataset):
         #print('pyin shape: ', pyin[0].shape)
         
         return mel_spectrogram, yin, pyin
+## OLD STUFF DEPRECATED END##
 
 
+# For Interacting with Michigan Dataset
 def read_michigan_dataset_index(data_root=os.path.join(os.getcwd(),"data_full")):
+    """
+    Reads the Michigan dataset index and returns a DataFrame containing the audio and transcript information.
 
+    Args:
+        data_root (str): The root directory of the dataset. Defaults to the 'data_full' directory in the current working directory.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the participant ID, word, tone class, audio filename, and XML filename.
+
+    """
     # handling transcripts
     audio = os.path.join(data_root, 'michigan', 'tone_perfect_all_mp3', 'tone_perfect')
     transcripts= os.path.join(data_root, 'michigan', 'tone_perfect_all_xml', 'tone_perfect')
@@ -169,7 +185,6 @@ def read_michigan_dataset_index(data_root=os.path.join(os.getcwd(),"data_full"))
     
     audioData = [parseAudioIndex(filename) for filename in audioIndex]
     return pd.DataFrame.from_records(data=audioData, columns=["participantID", "word", "toneclass", "filename",'xml_fn'])
-
 
 def read_michigan_dataset_audio(filename, 
                                 data_root=os.path.join(os.getcwd(),"data_full"),
@@ -456,6 +471,8 @@ def get_data_loader_michigan(args, test_size = 0.2, split_individual = False, te
             - batch_size (int): The batch size for the data loaders.
             - num_workers (int): The number of worker threads for the data loaders.
         test_size (float, optional): The proportion of the dataset to include in the test split. Defaults to 0.2.
+        split_individual (bool, optional): Whether to split the dataset individually for each tone class. Defaults to False.
+        test_speakers (set, optional): A set of speaker IDs to include in the test split. Defaults to {"FV1","MV1"}.
 
     Returns:
         tuple: A tuple containing the following elements:
@@ -517,7 +534,6 @@ def get_data_loader_michigan(args, test_size = 0.2, split_individual = False, te
         shuffle=True,
     )
     return train_ds, test_ds , data_loader_train, data_loader_test
-
 
 def get_data_loader_miget_sentence_loaderchigan(args, test_size = 0.2, split_individual = False):
     """
@@ -592,19 +608,39 @@ def get_data_loader_miget_sentence_loaderchigan(args, test_size = 0.2, split_ind
     return train_ds, test_ds , data_loader_train, data_loader_test
 
 
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
-import librosa.display
-import pinyin
-
 # For Segementation Pipeline
 def extract_pinyin(sentence_word_list):
+    """
+    Extracts the pinyin representation of each word in a sentence.
+
+    Args:
+        sentence_word_list (list): A list of words in the sentence.
+
+    Returns:
+        tuple: A tuple containing two elements:
+            - pinyin_word_list (tuple): A tuple of pinyin representations of each word.
+            - pinyin_word_list_tone_class (tuple): A tuple of tone classes for each pinyin representation.
+    """
     pinyin_word_list = tuple([pinyin.get(x, format="numerical", delimiter=" ") for x in sentence_word_list])
     pinyin_word_list_tone_class = tuple([int(x[-1]) if len(x)>1 else 0 for x in pinyin_word_list])
-    return pinyin_word_list,pinyin_word_list_tone_class
+    return pinyin_word_list, pinyin_word_list_tone_class
 
 def read_aidatatang_index(data_root=os.path.join(os.getcwd(),"data_full")):
+    """
+    Reads the AIDATATANG index file and returns a DataFrame containing the participant ID, sentence ID,
+    transcript, tone class, and folder information.
+
+    Parameters:
+    - data_root (str): The root directory of the AIDATATANG dataset (default: current working directory + '/data_full')
+
+    Returns:
+    - df (pandas.DataFrame): DataFrame containing the following columns:
+        - participantID (str): Participant ID
+        - sentenceID (str): Sentence ID
+        - transcript (tuple): Transcript text
+        - toneclass (tuple): Tone class IDs
+        - folder (str): Folder category (dev, test, or train)
+    """
 
     # handling transcripts
     transcript_path = os.path.join(data_root, 'aidatatang', 'transcript', 'aidatatang_200_zh_transcript.txt')
@@ -654,6 +690,23 @@ def read_aidatatang_index(data_root=os.path.join(os.getcwd(),"data_full")):
     return df
 
 def read_aidatatang_data(participantID, sentenceID):
+    """
+    Reads the AIDATATANG dataset for a specific participant and sentence.
+
+    Args:
+        participantID (str): The ID of the participant.
+        sentenceID (str): The ID of the sentence.
+
+    Returns:
+        dict: A dictionary containing the extracted data from the dataset.
+            The dictionary has the following keys:
+            - 'AudioData': The audio data as a numpy array.
+            - 'MetaData': A tuple containing the extracted pinyin.
+            - 'Transcript': The transcript of the sentence.
+
+    Raises:
+        IndexError: If the dataset file for the specified participant and sentence does not exist.
+    """
 
     fullFileName = f"T0055{participantID}{sentenceID}"
     data_root=os.path.join(os.getcwd(),"data_full")
@@ -706,8 +759,17 @@ class PhomemeLibrary():
         else:
             raise Exception(f"keep_loaded = {keep_loaded} is not implemented")
         
-    def getSentence(self, words, convert_fn = lambda x: x.replace("5", "4")):
+    def getSentence(self, words, convert_fn=lambda x: x.replace("5", "4")):
+        """
+        Retrieves the audio samples for the given words.
 
+        Args:
+            words (list): A list of words.
+            convert_fn (function, optional): A function to convert the words. Defaults to lambda x: x.replace("5", "4").
+
+        Returns:
+            tuple: A tuple containing the audio samples and the original words.
+        """
         audiosamples = []
         for word in words:
             word = convert_fn(word)
@@ -715,123 +777,177 @@ class PhomemeLibrary():
 
         return audiosamples, words
         
-    def mix_audio(self, 
-                  audiosamples, overlap = 0, add_silence = 1, signal_length_seconds = None , min_samples_each_word = 0):
-        
+    def mix_audio(self, audiosamples, overlap=0, add_silence=1, signal_length_seconds=None, min_samples_each_word=0):
+        """
+        Mixes multiple audio samples together with optional overlap and silence.
+
+        Args:
+            audiosamples (list): List of audio samples to be mixed.
+            overlap (int or str): Amount of overlap between consecutive audio samples. If "auto" is specified, the overlap is calculated automatically based on the desired signal length.
+            add_silence (float): Duration of silence to be added at the beginning and end of the mixed audio, in seconds.
+            signal_length_seconds (float): Desired length of the mixed audio signal, in seconds. Only used when overlap is set to "auto".
+            min_samples_each_word (int): Minimum number of samples allowed for each word in the mixed audio.
+
+        Returns:
+            tuple: A tuple containing the mixed audio signal as a numpy array and a list of delimiter indices indicating the boundaries of each audio sample in the mixed signal.
+        """
         frames_to_add = librosa.time_to_samples(add_silence, sr=16000)
         lens = [len(x) for x in audiosamples]
         total_len = 0
-
 
         if overlap == "auto" and not (signal_length_seconds is None):
             raise Exception("Auto Overlap does not work well, do use")
             signal_samples = librosa.time_to_samples(signal_length_seconds, sr=16000)
             actual_total_len = np.sum(lens)
-            overlap = (actual_total_len - signal_samples)/(len(lens)-1)
+            overlap = (actual_total_len - signal_samples) / (len(lens) - 1)
             assert overlap > 0
             for i in lens:
                 if overlap > i:
                     raise ValueError(f"Overlap {overlap} is larger than audio sample {i}")
-            
-        for idx,l in enumerate(lens):
+
+        for idx, l in enumerate(lens):
             if idx == 0:
                 total_len += l
             else:
                 total_len += l - overlap
-                
-        final = np.zeros(total_len+frames_to_add+frames_to_add)
+
+        final = np.zeros(total_len + frames_to_add + frames_to_add)
 
         base_frame_index = frames_to_add
         current_id = base_frame_index
         delims = []
         delims.append(current_id)
-        for idx,a in enumerate(audiosamples):
+        for idx, a in enumerate(audiosamples):
             audLen = len(a)
             if idx == 0:
-                final[current_id:current_id+audLen] = a
-                current_id = current_id+audLen
+                final[current_id : current_id + audLen] = a
+                current_id = current_id + audLen
             else:
                 current_id -= overlap
                 if current_id - delims[-1] < min_samples_each_word:
                     current_id = delims[-1] + min_samples_each_word
                 delims.append(current_id)
-                final[current_id:current_id+audLen] = a
-                current_id = current_id+audLen
+                final[current_id : current_id + audLen] = a
+                current_id = current_id + audLen
         delims.append(current_id)
         return final, delims
 
     def get_sample(self, sentence, overlap=0):
-        sentence_audio,clsses = self.getSentence(sentence)
+        """
+        Retrieves a mixed audio sample and its delimiters for a given sentence.
+
+        Args:
+            sentence (str): The input sentence.
+            overlap (int, optional): The amount of overlap between consecutive audio segments. Defaults to 0.
+
+        Returns:
+            mixed_audio (np.ndarray): The mixed audio sample.
+            delimiters (List[Tuple[int, int]]): The delimiters indicating the start and end indices of each audio segment.
+        """
+        sentence_audio, clsses = self.getSentence(sentence)
         mixed_audio, delimiters = self.mix_audio(sentence_audio, overlap=overlap)
         return mixed_audio, delimiters
 
 class FusedSentenceMichigan(Dataset):
    
     def __init__(self, 
-                    dataset_root = os.path.join(os.getcwd(),"data_full"),
-                    dataset_index = None,
-                    sampling_rate = 16000,
-                    preload_audio = True,
-                    pad_audio = True,
-                    sample_length = 15,
-                    feature_options = {"mel_spectrogram"}, #for future iterations
-                    audio_source = ("michigan", "MV1"),
-                    overlaps = [4000],
-                    random_seed = 1234,
-                    dataset_size = 500,
-                    use_real_data = False
-                    ):
-        
-        self.properties = {
-            "dataset_root": dataset_root,
-            "dataset_index": dataset_index,
-            "sampling_rate": sampling_rate,
-            "preload_audio": preload_audio,
-            "pad_audio": pad_audio,
-            "sample_length": sample_length,
-            "feature_options": feature_options,
-            "audio_source": audio_source,
-            "overlaps": overlaps,
-            "random_seed": random_seed,
-            "dataset_size": dataset_size,
-            "use_real_data": use_real_data
-        }
+                        dataset_root = os.path.join(os.getcwd(),"data_full"),
+                        dataset_index = None,
+                        sampling_rate = 16000,
+                        preload_audio = True,
+                        pad_audio = True,
+                        sample_length = 15,
+                        feature_options = {"mel_spectrogram"}, #for future iterations
+                        audio_source = ("michigan", "MV1"),
+                        overlaps = [4000],
+                        random_seed = 1234,
+                        dataset_size = 500,
+                        use_real_data = False
+                        ):
+            """
+            Initializes the dataset object.
 
-        
-        self.dataset_root = dataset_root
-        self.sampling_rate = sampling_rate
-        self.pad_samples = librosa.time_to_samples(sample_length, sr=sampling_rate)
-        self.preload_audio = preload_audio
-        self.pad_audio = pad_audio
-        self.features = feature_options
+            Args:
+                dataset_root (str): Root directory of the dataset.
+                dataset_index (str): Path to the dataset index file.
+                sampling_rate (int): Sampling rate of the audio.
+                preload_audio (bool): Whether to preload audio files into memory.
+                pad_audio (bool): Whether to pad audio files to a fixed length.
+                sample_length (int): Length of audio samples in seconds.
+                feature_options (set): Set of feature options to extract from audio.
+                audio_source (tuple): Tuple specifying the audio source.
+                overlaps (list): List of overlap values for audio samples.
+                random_seed (int): Random seed for dataset sampling.
+                dataset_size (int): Size of the dataset.
+                use_real_data (bool): Whether to use real data or not.
+            """
+            
+            self.properties = {
+                "dataset_root": dataset_root,
+                "dataset_index": dataset_index,
+                "sampling_rate": sampling_rate,
+                "preload_audio": preload_audio,
+                "pad_audio": pad_audio,
+                "sample_length": sample_length,
+                "feature_options": feature_options,
+                "audio_source": audio_source,
+                "overlaps": overlaps,
+                "random_seed": random_seed,
+                "dataset_size": dataset_size,
+                "use_real_data": use_real_data
+            }
 
-        self.PhomemeLibrary = PhomemeLibrary(audio_source=audio_source,keep_loaded=True)
-        self.overlaps = overlaps
-        self.use_real_data = use_real_data
+            
+            self.dataset_root = dataset_root
+            self.sampling_rate = sampling_rate
+            self.pad_samples = librosa.time_to_samples(sample_length, sr=sampling_rate)
+            self.preload_audio = preload_audio
+            self.pad_audio = pad_audio
+            self.features = feature_options
+
+            self.PhomemeLibrary = PhomemeLibrary(audio_source=audio_source,keep_loaded=True)
+            self.overlaps = overlaps
+            self.use_real_data = use_real_data
 
 
-        sentence_index_overall = read_aidatatang_index()
-        sentence_index_overall[sentence_index_overall["folder"] == 'dev'].drop_duplicates(subset = "transcript", keep= "first")
-        sentence_index_overall_wordlens = sentence_index_overall.apply(lambda x: len(x["transcript"]), axis=1)
-        mask = sentence_index_overall_wordlens<=10
-        self.sentenceIndex = sentence_index_overall[mask]
+            sentence_index_overall = read_aidatatang_index()
+            sentence_index_overall[sentence_index_overall["folder"] == 'dev'].drop_duplicates(subset = "transcript", keep= "first")
+            sentence_index_overall_wordlens = sentence_index_overall.apply(lambda x: len(x["transcript"]), axis=1)
+            mask = sentence_index_overall_wordlens<=10
+            self.sentenceIndex = sentence_index_overall[mask]
 
-        blackListed_words = {"Q"}
-        filter_sentences_mask = self.sentenceIndex["transcript"].apply(lambda x: len([1 for y in x if len(y)==1]) ==0 )
-        self.sentenceIndex =self.sentenceIndex[filter_sentences_mask]
+            blackListed_words = {"Q"}
+            filter_sentences_mask = self.sentenceIndex["transcript"].apply(lambda x: len([1 for y in x if len(y)==1]) ==0 )
+            self.sentenceIndex =self.sentenceIndex[filter_sentences_mask]
 
-        chosen_ids = np.random.default_rng(seed=random_seed).choice(np.arange(0, len(self.sentenceIndex)), size=dataset_size, replace=False)
-        
-        self.sentenceIndex = self.sentenceIndex.iloc[chosen_ids]
-        print(f"created dataset with {len(self.sentenceIndex)} samples")
+            chosen_ids = np.random.default_rng(seed=random_seed).choice(np.arange(0, len(self.sentenceIndex)), size=dataset_size, replace=False)
+            
+            self.sentenceIndex = self.sentenceIndex.iloc[chosen_ids]
+            print(f"created dataset with {len(self.sentenceIndex)} samples")
 
     def __len__(self):
         return len(self.sentenceIndex)
 
-    def preproccessData(self):
-        pass
-
     def __getitem__(self, idx, for_plot=False, features_override=None):
+        """
+        Retrieve the item at the given index from the dataset.
+
+        Args:
+            idx (int): The index of the item to retrieve.
+            for_plot (bool, optional): Whether the item is being retrieved for plotting. Defaults to False.
+            features_override (list, optional): List of features to override the default features. Defaults to None.
+
+        Returns:
+            tuple: A tuple containing the following elements:
+                - mel_spectrogram_normalised_log_scale (numpy.ndarray): Normalized log-scale mel spectrogram.
+                - toneClasses (numpy.ndarray): Array of tone classes.
+                - padded_audio_data (numpy.ndarray): Padded audio data.
+                - sentence (str): The sentence.
+                - delimiter_time (numpy.ndarray): Array of delimiter times.
+                - timelimit_start (float): Start time limit.
+                - timelimit_end (float): End time limit.
+                - originallen (int): The original length of toneClasses.
+        """
         features = self.features if features_override is None else features_override
 
         sentence = self.sentenceIndex.iloc[idx]["transcript"]
@@ -872,7 +988,7 @@ class FusedSentenceMichigan(Dataset):
                 n_fft=mel_spectrogram_n_fft,
                 win_length=mel_spectrogram_window_length,
                 n_mels=mel_spectrogram_n_mels,
-                ) 
+            ) 
             mel_spectrogram_normalised_log_scale = librosa.amplitude_to_db(mel_spectrogram, ref=np.max)
         else:
             mel_spectrogram_normalised_log_scale = 1
@@ -886,6 +1002,13 @@ class FusedSentenceMichigan(Dataset):
         return self.properties
 
 def load_segmentation_model():
+    """
+    Loads the segmentation model for tone evaluation.
+
+    Returns:
+        processor (Wav2Vec2Processor): The processor for the segmentation model.
+        model (Wav2Vec2ForCTC): The segmentation model.
+    """
     LANG_ID = "zh-CN"
     MODEL_ID = "jonatasgrosman/wav2vec2-large-xlsr-53-chinese-zh-cn"
 
@@ -894,21 +1017,40 @@ def load_segmentation_model():
     return processor, model
 
 def get_segmentations(processor, model, batch_input_audio, DEVICE = "cuda"):
-    # proccessed = processor(batch_input_audio, sampling_rate=16000, return_tensors="pt", padding=True).input_values
+    """
+    Get segmentations and transcriptions for a batch of input audio.
+
+    Args:
+        processor (Processor): The audio processor.
+        model (Model): The model for segmentation and transcription.
+        batch_input_audio (list): List of input audio samples.
+        DEVICE (str, optional): The device to use for processing. Defaults to "cuda".
+
+    Returns:
+        tuple: A tuple containing the predicted segmentation IDs and the transcriptions.
+    """
     proccessed = processor(batch_input_audio, return_tensors="pt",sampling_rate=16000).input_values
     proccessed = torch.squeeze(proccessed, dim=(0,1)) 
     proccessed = proccessed.to(DEVICE)
 
-
     with torch.no_grad():
         logits = model(proccessed).logits
 
-    # predicted_ids_softmax = torch.softmax(logits, dim=-1)
     predicted_ids = torch.argmax(logits, dim=-1).cpu()
     transcription = processor.batch_decode(predicted_ids)
     return predicted_ids, transcription
 
 def get_timings(prediction_raw_argmax, _wav2vechoplen = 20/1000):
+    """
+    Calculates the timings for each prediction in the given array.
+
+    Parameters:
+    prediction_raw_argmax (numpy.ndarray): Array of prediction values.
+    _wav2vechoplen (float): Conversion factor from frame length to seconds
+
+    Returns:
+    list: List of timings for each prediction.
+    """
     results = []
     for i in range(len(prediction_raw_argmax)):
         mask =  prediction_raw_argmax[i]!=0
@@ -918,14 +1060,35 @@ def get_timings(prediction_raw_argmax, _wav2vechoplen = 20/1000):
     return results
 
 def filter_data_batch_mutate(predictions, sig_end):
+    """
+    Filter the predictions batch based on the sig_end values. Make sure no prediciton exist past end of signal
+
+    Args:
+        predictions (list): List of prediction arrays.
+        sig_end (list): List of sig_end values.
+
+    Returns:
+        list: Filtered predictions batch.
+    """
     for i in range(len(predictions)):
-        predictions[i] = predictions[i][predictions[i]<sig_end[i].item()]
+        predictions[i] = predictions[i][predictions[i] < sig_end[i].item()]
     return predictions
 
-def doCluster_batch(data,clusters):
+def doCluster_batch(data, clusters):
+    """
+    Perform batch clustering on the given data.
+
+    Args:
+        data (list): A list of samples to be clustered.
+        clusters (list): A list of integers representing the number of clusters for each sample.
+
+    Returns:
+        list: A list of lists, where each inner list contains the final elements of each cluster.
+
+    """
     output = []
-    for i in range(len(data)): 
-        sample = data[i] 
+    for i in range(len(data)):
+        sample = data[i]
         n_clusts = clusters[i].item()
         # Create an instance of the KMeans class
         n_clusts = min(n_clusts, len(sample))
@@ -937,12 +1100,12 @@ def doCluster_batch(data,clusters):
         labels = kmeans.labels_
         # Get the cluster centers
         centers = kmeans.cluster_centers_
-        
+
         clusts = np.arange(n_clusts)
-        
-        d = {x:[] for x in clusts}
+
+        d = {x: [] for x in clusts}
         _ = [d[labels[j]].append(sample[j]) for j in range(len(labels))]
-        
+
         for v in d:
             d[v] = sorted(d[v], reverse=True)
 
@@ -953,12 +1116,29 @@ def doCluster_batch(data,clusters):
         output.append(final)
     return output
 
-def process_segmentation_results(frame_ids, cluster_sizes,sig_end):
+def process_segmentation_results(frame_ids, cluster_sizes, sig_end):
+    """
+    Process the segmentation results by performing the following steps:
+    1. Get the timings for each frame ID.
+    2. Filter the timings based on the significant end value.
+    3. Cluster the filtered timings using the specified cluster sizes.
+
+    Args:
+        frame_ids (list): List of frame IDs.
+        cluster_sizes (list): List of cluster sizes.
+        sig_end (float): Significant end value.
+
+    Returns:
+        list: Clustered timings.
+
+    """
     frames_to_timing = get_timings(frame_ids)
     frames_to_timing_filtered = filter_data_batch_mutate(frames_to_timing, sig_end)
-    clustered = doCluster_batch(frames_to_timing_filtered,cluster_sizes)
+    clustered = doCluster_batch(frames_to_timing_filtered, cluster_sizes)
     return clustered
 
+
+# Mostly unused
 def plot_melspectrogram(mel,toneClasses,padded_audio_data,sentence,delimiter_time,timelimit_start, timelimit_end,originallen, optionalTimings = []):
     fig, ax1= plt.subplots(1, 1, figsize=(5, 3))
     
@@ -983,7 +1163,6 @@ def plot_melspectrogram(mel,toneClasses,padded_audio_data,sentence,delimiter_tim
 def split_audio_by_segmentation(audio, delimiters_time, signal_end):
     final_set = delimiters_time + [signal_end]
     return [audio[delimiters[i]:delimiters[i+1]] for i in range(len(delimiters)-1)]
-
 
 def single_segmentation(audio,originallen = 10, DEVICE = "cuda"):
     processor, model = load_segmentation_model()
@@ -1016,20 +1195,37 @@ def single_segmentation_no_load(audio, processor, model,originallen = 10, DEVICE
     return  predictions, transcription,segementation_times
 
 
+np.random.seed(1234)
+
 def run_segmentation(dataset = None, DEVICE = "cuda"):
-    processor, model = load_segmentation_model(DEVICE = DEVICE)
+    """
+    Runs the segmentation process on the given dataset.
+
+    Args:
+        dataset (Dataset): The dataset to perform segmentation on.
+        DEVICE (str): The device to run the segmentation on (default is "cuda").
+
+    Returns:
+        tuple: A tuple containing the results of the segmentation process and the properties of the dataset.
+            The tuple contains the following elements:
+            - sentence_results (list): A list of sentences from the dataset.
+            - transcription_results (list): A list of transcriptions generated during the segmentation process.
+            - segementation_times_results (list): A list of segmentation times for each sentence.
+            - delimiter_time_results (list): A list of delimiter times for each sentence.
+            - audioData (list): A list of combined audio data for each sentence.
+        dataset_properties (dict): The properties of the dataset.
+    """
+    processor, model = load_segmentation_model()
     test_data_loader = DataLoader(dataset, batch_size=16, pin_memory=True)
     dataset_properties = dataset.get_properties()
 
     model = model.to(DEVICE)
-
 
     sentence_results = []
     transcription_results = []
     segementation_times_results = []
     delimiter_time_results = []
     audioData = []
-
 
     for batch_id, batch in enumerate(tqdm(test_data_loader)):
         mel_spectrogram_normalised_log_scale, toneClasses, combinedAudio, sentence, delimiter_time, timelimit_start, timelimit_end, originallen = batch
@@ -1055,6 +1251,23 @@ def shallow_concat(x):
     return new_x
 
 def get_alignment(x, real=False):
+    """
+    Calculate the alignment between segmentation times and delimiter times.
+
+    Args:
+        x (dict): A dictionary containing the following keys:
+            - "word_count" (int): The number of words for the sentence.
+            - "segementation_times_results" (list): A list of segmentation times.
+            - "delimiter_time_results" (list): A list of delimiter times.
+        real (bool, optional): If True, return a mapping array with no alignment. 
+            Defaults to False.
+
+    Returns:
+        pandas.Series: A pandas Series containing the following keys:
+            - "diffs" (float): The mean difference between segmentation times and delimiter times.
+            - "mappingArray" (list): A list representing the mapping array.
+
+    """
     wc = x["word_count"]
     seg = sorted(x["segementation_times_results"], reverse=False)
     gt = x["delimiter_time_results"]
@@ -1112,6 +1325,36 @@ def transcription_to_pinyin(transcription_str):
     return pinyin.get(transcription_str, format="numerical", delimiter="_").split("_")
 
 def processes_segementation_results_global(segmentation_Results, real=False):
+    """
+    Processes the segmentation results and returns a results DataFrame and an audio DataFrame.
+
+    Args:
+        segmentation_Results (tuple): A tuple containing the segmentation results.
+            The tuple should have the following elements:
+            - sentence_results (list): List of sentence results.
+            - transcription_results (list): List of transcription results.
+            - segementation_times_results (list): List of segmentation times results.
+            - delimiter_time_results (list): List of delimiter time results.
+            - audioData (list): List of audio data.
+
+        real (bool, optional): Flag indicating whether the segmentation results are real or not.
+            Defaults to False.
+
+    Returns:
+        tuple: A tuple containing the processed DataFrame and audio DataFrame.
+            The tuple has the following elements:
+            - df (pandas.DataFrame): Processed DataFrame with the following columns:
+                - sentence_results: Sentence results.
+                - transcription_results: Transcription results.
+                - word_count: Word count of each sentence.
+                - segementation_times_results: Segmentation times results.
+                - delimiter_time_results: Delimiter time results.
+                - diff: Difference between word count and segmentation times count.
+                - err: Error value.
+                - mappings: Mappings.
+            - aud_df (pandas.DataFrame): Audio DataFrame with the following column:
+                - audio: Audio data.
+    """
     sentence_results, transcription_results, segementation_times_results, delimiter_time_results,audioData= segmentation_Results
     sentence_results = shallow_concat(sentence_results, )
     transcription_results = shallow_concat(transcription_results)
@@ -1156,3 +1399,115 @@ def processes_segementation_results_global(segmentation_Results, real=False):
     aud_df["audio"] = [[]]*ds_len
     aud_df["audio"] = audioData
     return df, aud_df
+
+def convert_segmentations_to_index(segmentations, convert_fn = lambda x: x.replace("5", "4"), real = False):
+    """
+    Converts segmentations to index format.
+
+    Args:
+        segmentations (DataFrame): The input segmentations DataFrame.
+        convert_fn (function, optional): The function used to convert the segmentations. Defaults to lambda x: x.replace("5", "4").
+        real (bool, optional): Flag indicating whether to include only real or synthetic data. Defaults to False.
+
+    Returns:
+        DataFrame: The converted segmentations in index format.
+    """
+    finalResults = []
+    for i in range(len(segmentations)):
+        results_entry = segmentations.iloc[i]
+        word_count = results_entry['word_count']
+        sentence = results_entry['sentence_results']
+        mappings = results_entry['mappings']
+
+        temp = "_".join(results_entry['transcription_results'])
+        # replace all <_u_n_k_> with ?
+        temp = temp.replace("<_u_n_k_>", "?")
+        split = temp.split("_")
+        split = [x for x in split if x != ""]
+
+        if real and results_entry['diff'] != 0:
+            continue
+
+        split_sentence = sentence.split("_")
+        split_sentence = [convert_fn(x) for x in split_sentence]
+        for j in range(len(split_sentence)):
+            word_id = split_sentence[j] 
+            toneclass = int(word_id[-1])
+            main_Idx = i
+            word_Idx = j
+            mapped_onset = mappings[j]
+            if mapped_onset == -1:
+                transcripted_tone_class = np.random.choice([1,2,3,4])
+            else:
+                try:
+                    string_tone_class = split[mapped_onset][-1]
+                    string_tone_class = convert_fn(string_tone_class)
+                    if string_tone_class == "?":
+                        transcripted_tone_class = np.random.choice([1,2,3,4])
+                    else:
+                        transcripted_tone_class = int(string_tone_class)
+                except:
+                    transcripted_tone_class = np.random.choice([1,2,3,4])
+            finalResults.append((word_id, toneclass, main_Idx, word_Idx,mapped_onset, transcripted_tone_class))
+        
+    return pd.DataFrame(finalResults, columns=['word_id', 'toneclass', 'main_Idx', 'word_Idx', 'mapped_onset','transcripted_tone_class'])
+
+
+def get_audio_sample_at_idx(idx,pSEG_index, pSEG, pSEGAUDIO, sr= 16000, max_time=1.5):
+    """
+    Retrieves an audio sample from the dataset based on the given index.
+
+    Args:
+        idx (int): The index of the audio sample to retrieve.
+        pSEG_index (pandas.DataFrame): DataFrame containing index information.
+        pSEG (pandas.DataFrame): DataFrame containing sentence information.
+        pSEGAUDIO (pandas.DataFrame): DataFrame containing audio information.
+        sr (int, optional): The sample rate of the audio. Defaults to 16000.
+        max_time (float, optional): The maximum duration of the audio sample in seconds. Defaults to 1.5.
+
+    Returns:
+        tuple: A tuple containing the sample information and the audio sample.
+    """
+
+    sample_info = pSEG_index.iloc[idx]
+    pSEG_idx = sample_info['main_Idx']
+
+    sentence_info = pSEG.iloc[pSEG_idx]
+    pSEG_audio = pSEGAUDIO.iloc[pSEG_idx]["audio"]
+
+
+    segementation_start_time_gt = sentence_info['delimiter_time_results']
+    if len(segementation_start_time_gt) == sentence_info['word_count']:
+        segementation_start_time_gt = segementation_start_time_gt + [segementation_start_time_gt[-1] + max_time]
+
+
+    segementation_start_time = sorted(sentence_info['segementation_times_results'] + [segementation_start_time_gt[sentence_info['word_count']]])
+    segmentation_onset_mapping = sentence_info['mappings']
+    mapped_onset = sample_info['mapped_onset']
+
+    current_mapping = segmentation_onset_mapping[sample_info['word_Idx']]
+
+    # print(sample_info)
+    # print(sentence_info)
+    # print(segementation_start_time_gt)
+    if current_mapping == -1:
+        # unmapped, use previous result
+        prev_mapping = 0
+        for i in range(sample_info['word_Idx'], -1, -1):
+            if segmentation_onset_mapping[i] != -1:
+                prev_mapping = segmentation_onset_mapping[i]
+                break
+        # prev_mapping = segmentation_onset_mapping[sample_info['word_Idx'] - 1]
+        start_time = segementation_start_time[prev_mapping]
+        end_time = segementation_start_time[prev_mapping+1] 
+        # print(idx,prev_mapping,prev_mapping+1)
+    else:
+        start_time = segementation_start_time[current_mapping] 
+        end_time = segementation_start_time[current_mapping+1]
+
+    start_samples = librosa.time_to_samples(start_time, sr=sr)
+    if end_time-start_time > max_time:
+        end_time = start_time + max_time
+    end_samples = librosa.time_to_samples(end_time, sr=sr)
+
+    return sample_info,pSEG_audio[start_samples:end_samples]
