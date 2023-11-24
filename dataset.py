@@ -1017,7 +1017,7 @@ def single_segmentation_no_load(audio, processor, model,originallen = 10, DEVICE
 
 
 def run_segmentation(dataset = None, DEVICE = "cuda"):
-    processor, model = load_segmentation_model(DEVICE = DEVICE)
+    processor, model = load_segmentation_model()
     test_data_loader = DataLoader(dataset, batch_size=16, pin_memory=True)
     dataset_properties = dataset.get_properties()
 
@@ -1156,3 +1156,88 @@ def processes_segementation_results_global(segmentation_Results, real=False):
     aud_df["audio"] = [[]]*ds_len
     aud_df["audio"] = audioData
     return df, aud_df
+np.random.seed(1234)
+def convert_segmentations_to_index(segmentations, convert_fn = lambda x: x.replace("5", "4"), real = False):
+    finalResults = []
+    for i in range(len(segmentations)):
+        results_entry = segmentations.iloc[i]
+        word_count = results_entry['word_count']
+        sentence = results_entry['sentence_results']
+        mappings = results_entry['mappings']
+
+        temp = "_".join(results_entry['transcription_results'])
+        # replace all <_u_n_k_> with ?
+        temp = temp.replace("<_u_n_k_>", "?")
+        split = temp.split("_")
+        split = [x for x in split if x != ""]
+
+        if real and results_entry['diff'] != 0:
+            continue
+
+        split_sentence = sentence.split("_")
+        split_sentence = [convert_fn(x) for x in split_sentence]
+        for j in range(len(split_sentence)):
+            word_id = split_sentence[j] 
+            toneclass = int(word_id[-1])
+            main_Idx = i
+            word_Idx = j
+            mapped_onset = mappings[j]
+            if mapped_onset == -1:
+                transcripted_tone_class = np.random.choice([1,2,3,4])
+            else:
+                try:
+                    string_tone_class = split[mapped_onset][-1]
+                    string_tone_class = convert_fn(string_tone_class)
+                    if string_tone_class == "?":
+                        transcripted_tone_class = np.random.choice([1,2,3,4])
+                    else:
+                        transcripted_tone_class = int(string_tone_class)
+                except:
+                    transcripted_tone_class = np.random.choice([1,2,3,4])
+            finalResults.append((word_id, toneclass, main_Idx, word_Idx,mapped_onset, transcripted_tone_class))
+        
+    return pd.DataFrame(finalResults, columns=['word_id', 'toneclass', 'main_Idx', 'word_Idx', 'mapped_onset','transcripted_tone_class'])
+
+def get_audio_sample_at_idx(idx,pSEG_index, pSEG, pSEGAUDIO, sr= 16000, max_time=1.5):
+    sample_info = pSEG_index.iloc[idx]
+    pSEG_idx = sample_info['main_Idx']
+
+    sentence_info = pSEG.iloc[pSEG_idx]
+    pSEG_audio = pSEGAUDIO.iloc[pSEG_idx]["audio"]
+
+
+    segementation_start_time_gt = sentence_info['delimiter_time_results']
+    if len(segementation_start_time_gt) == sentence_info['word_count']:
+        segementation_start_time_gt = segementation_start_time_gt + [segementation_start_time_gt[-1] + max_time]
+
+
+    segementation_start_time = sorted(sentence_info['segementation_times_results'] + [segementation_start_time_gt[sentence_info['word_count']]])
+    segmentation_onset_mapping = sentence_info['mappings']
+    mapped_onset = sample_info['mapped_onset']
+
+    current_mapping = segmentation_onset_mapping[sample_info['word_Idx']]
+
+    # print(sample_info)
+    # print(sentence_info)
+    # print(segementation_start_time_gt)
+    if current_mapping == -1:
+        # unmapped, use previous result
+        prev_mapping = 0
+        for i in range(sample_info['word_Idx'], -1, -1):
+            if segmentation_onset_mapping[i] != -1:
+                prev_mapping = segmentation_onset_mapping[i]
+                break
+        # prev_mapping = segmentation_onset_mapping[sample_info['word_Idx'] - 1]
+        start_time = segementation_start_time[prev_mapping]
+        end_time = segementation_start_time[prev_mapping+1] 
+        # print(idx,prev_mapping,prev_mapping+1)
+    else:
+        start_time = segementation_start_time[current_mapping] 
+        end_time = segementation_start_time[current_mapping+1]
+
+    start_samples = librosa.time_to_samples(start_time, sr=sr)
+    if end_time-start_time > max_time:
+        end_time = start_time + max_time
+    end_samples = librosa.time_to_samples(end_time, sr=sr)
+
+    return sample_info,pSEG_audio[start_samples:end_samples]

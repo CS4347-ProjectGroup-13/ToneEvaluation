@@ -57,3 +57,6 @@ data_full/*
 test.ipynb
 results/*
 
+# ignore all files in results_segementation/ and subfolders with the pkl extension
+results_segementation/**/*.pkl
+
