@@ -244,8 +244,6 @@ def test(args, save_model_dir_override=None, dataloaders = None):
     with open(save_model_dir + '/testing_results.txt', 'w') as f:
         json.dump({"gt":gt,"prd":prd},f)
 
-
-
 def dotrain_test(config):
     #For the Michigan dataset
     save_dir_override = config["name"] 
@@ -255,7 +253,9 @@ def dotrain_test(config):
     print(f"Starting Training on {config}")
 
     train_ds, test_ds, data_loader_train, data_loader_test = get_data_loader_michigan(args=Hparams_michigan.args, test_size=0.4,split_individual=False,test_speakers=Hparams_michigan.args["test_speakers"])
+    
 
+    # You may change the learning parameters here.
     learning_params = {
     'epoch': 10,
     'lr': 1e-3,
@@ -267,7 +267,7 @@ def dotrain_test(config):
     test(args=Hparams_michigan.args, save_model_dir_override=save_dir_override, dataloaders=(train_ds, test_ds, data_loader_train, data_loader_test))
 
 CONFIGS= [
-    # {"name":"michigan_MV1", "test_speakers":  ['MV1']},
+    {"name":"michigan_MV1", "test_speakers":  ['MV1']},
     {"name":"michigan_MV2", "test_speakers":  ['MV2']},
     {"name":"michigan_MV3", "test_speakers":  ['MV3']},
     {"name":"michigan_FV1", "test_speakers":  ['FV1']},
