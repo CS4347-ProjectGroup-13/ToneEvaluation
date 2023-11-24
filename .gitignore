@@ -55,7 +55,7 @@ data_full/*
 !data_full/placeholder.txt
 
 test.ipynb
-results/*
+# results/*
 
 # ignore all files in results_segementation/ and subfolders with the pkl extension
 results_segementation/**/*.pkl

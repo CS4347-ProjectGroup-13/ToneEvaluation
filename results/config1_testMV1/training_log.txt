@@ -1,0 +1,150 @@
+====EPOCH 1 ====  saved:True
+[Epoch 01], Train Loss: 0.78510, Valid Loss 0.92494, Time 47.78s
+Split Train Loss, Accuracy: Loss 0.7851 | Accuracy 0.9588
+Split Test Loss, Accuracy: Loss 0.9249 | Accuracy 0.8155
+              precision    recall  f1-score   support
+
+           0     0.9872    0.9415    0.9638       410
+           1     0.9151    0.9732    0.9433       410
+           2     1.0000    0.3512    0.5199       410
+           3     0.6129    1.0000    0.7600       410
+
+    accuracy                         0.8165      1640
+   macro avg     0.8788    0.8165    0.7967      1640
+weighted avg     0.8788    0.8165    0.7967      1640
+
+====EPOCH 2 ====  saved:True
+[Epoch 02], Train Loss: 0.75366, Valid Loss 0.85315, Time 95.03s
+Split Train Loss, Accuracy: Loss 0.7537 | Accuracy 0.9909
+Split Test Loss, Accuracy: Loss 0.8532 | Accuracy 0.8882
+              precision    recall  f1-score   support
+
+           0     0.7348    1.0000    0.8471       410
+           1     0.9537    0.9537    0.9537       410
+           2     1.0000    0.6098    0.7576       410
+           3     0.9621    0.9902    0.9760       410
+
+    accuracy                         0.8884      1640
+   macro avg     0.9126    0.8884    0.8836      1640
+weighted avg     0.9126    0.8884    0.8836      1640
+
+====EPOCH 3 ====  saved:False
+[Epoch 03], Train Loss: 0.75996, Valid Loss 0.86319, Time 140.75s
+Split Train Loss, Accuracy: Loss 0.7600 | Accuracy 0.9843
+Split Test Loss, Accuracy: Loss 0.8632 | Accuracy 0.8810
+              precision    recall  f1-score   support
+
+           0     0.9879    0.9951    0.9915       410
+           1     0.8450    0.9976    0.9150       410
+           2     1.0000    0.5390    0.7005       410
+           3     0.7854    1.0000    0.8798       410
+
+    accuracy                         0.8829      1640
+   macro avg     0.9046    0.8829    0.8717      1640
+weighted avg     0.9046    0.8829    0.8717      1640
+
+====EPOCH 4 ====  saved:True
+[Epoch 04], Train Loss: 0.75380, Valid Loss 0.84065, Time 186.88s
+Split Train Loss, Accuracy: Loss 0.7538 | Accuracy 0.9898
+Split Test Loss, Accuracy: Loss 0.8406 | Accuracy 0.9038
+              precision    recall  f1-score   support
+
+           0     0.8233    1.0000    0.9031       410
+           1     0.9635    0.9659    0.9647       410
+           2     1.0000    0.6439    0.7834       410
+           3     0.8779    1.0000    0.9350       410
+
+    accuracy                         0.9024      1640
+   macro avg     0.9162    0.9024    0.8965      1640
+weighted avg     0.9162    0.9024    0.8965      1640
+
+====EPOCH 5 ====  saved:False
+[Epoch 05], Train Loss: 0.75292, Valid Loss 0.88795, Time 232.55s
+Split Train Loss, Accuracy: Loss 0.7529 | Accuracy 0.9910
+Split Test Loss, Accuracy: Loss 0.8879 | Accuracy 0.8552
+              precision    recall  f1-score   support
+
+           0     0.9447    1.0000    0.9716       410
+           1     0.9684    0.9732    0.9708       410
+           2     1.0000    0.4610    0.6311       410
+           3     0.6777    1.0000    0.8079       410
+
+    accuracy                         0.8585      1640
+   macro avg     0.8977    0.8585    0.8453      1640
+weighted avg     0.8977    0.8585    0.8453      1640
+
+====EPOCH 6 ====  saved:True
+[Epoch 06], Train Loss: 0.75450, Valid Loss 0.77831, Time 281.35s
+Split Train Loss, Accuracy: Loss 0.7545 | Accuracy 0.9895
+Split Test Loss, Accuracy: Loss 0.7783 | Accuracy 0.9645
+              precision    recall  f1-score   support
+
+           0     0.9624    1.0000    0.9809       410
+           1     1.0000    0.9951    0.9976       410
+           2     1.0000    0.8610    0.9253       410
+           3     0.9051    1.0000    0.9502       410
+
+    accuracy                         0.9640      1640
+   macro avg     0.9669    0.9640    0.9635      1640
+weighted avg     0.9669    0.9640    0.9635      1640
+
+====EPOCH 7 ====  saved:True
+[Epoch 07], Train Loss: 0.75158, Valid Loss 0.76588, Time 331.33s
+Split Train Loss, Accuracy: Loss 0.7516 | Accuracy 0.9917
+Split Test Loss, Accuracy: Loss 0.7659 | Accuracy 0.9790
+              precision    recall  f1-score   support
+
+           0     0.9762    1.0000    0.9880       410
+           1     0.9852    0.9756    0.9804       410
+           2     1.0000    0.9390    0.9686       410
+           3     0.9557    1.0000    0.9774       410
+
+    accuracy                         0.9787      1640
+   macro avg     0.9793    0.9787    0.9786      1640
+weighted avg     0.9793    0.9787    0.9786      1640
+
+====EPOCH 8 ====  saved:False
+[Epoch 08], Train Loss: 0.74818, Valid Loss 0.85553, Time 378.14s
+Split Train Loss, Accuracy: Loss 0.7482 | Accuracy 0.9955
+Split Test Loss, Accuracy: Loss 0.8555 | Accuracy 0.8936
+              precision    recall  f1-score   support
+
+           0     0.9425    1.0000    0.9704       410
+           1     0.9809    1.0000    0.9903       410
+           2     1.0000    0.5683    0.7247       410
+           3     0.7401    1.0000    0.8506       410
+
+    accuracy                         0.8921      1640
+   macro avg     0.9159    0.8921    0.8840      1640
+weighted avg     0.9159    0.8921    0.8840      1640
+
+====EPOCH 9 ====  saved:False
+[Epoch 09], Train Loss: 0.75012, Valid Loss 0.76968, Time 424.66s
+Split Train Loss, Accuracy: Loss 0.7501 | Accuracy 0.9936
+Split Test Loss, Accuracy: Loss 0.7697 | Accuracy 0.9760
+              precision    recall  f1-score   support
+
+           0     0.9880    1.0000    0.9939       410
+           1     0.9830    0.9878    0.9854       410
+           2     1.0000    0.9220    0.9594       410
+           3     0.9425    1.0000    0.9704       410
+
+    accuracy                         0.9774      1640
+   macro avg     0.9784    0.9774    0.9773      1640
+weighted avg     0.9784    0.9774    0.9773      1640
+
+====EPOCH 10 ====  saved:False
+[Epoch 10], Train Loss: 0.74881, Valid Loss 0.82463, Time 471.51s
+Split Train Loss, Accuracy: Loss 0.7488 | Accuracy 0.9945
+Split Test Loss, Accuracy: Loss 0.8246 | Accuracy 0.9177
+              precision    recall  f1-score   support
+
+           0     0.8233    1.0000    0.9031       410
+           1     0.9274    0.9976    0.9612       410
+           2     1.0000    0.6976    0.8218       410
+           3     0.9663    0.9780    0.9721       410
+
+    accuracy                         0.9183      1640
+   macro avg     0.9292    0.9183    0.9146      1640
+weighted avg     0.9292    0.9183    0.9146      1640
+
