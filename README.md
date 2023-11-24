@@ -33,9 +33,9 @@ Pip Freeze/requirements files are a lot less reliable across wildly different ma
 Installing from command line seem to be much less of a headache than deconflicting versions, since it resolves dependencies locally and in order
 Assumes you have both mamba and pip installed. If you are missing a module later on, just pip or mamba install it. Change for cuda versions as needed
 
--mamba install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia <br>
--mamba install pandas tqdm scikit-learn matplotlib flask transformers chardet<br>
--pip install pinyin<br>
+- mamba install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia <br>
+- mamba install pandas tqdm scikit-learn matplotlib flask transformers chardet<br>
+- pip install pinyin<br>
 
 
 # Definition of Tone in Mandarin (for this project + baseline):
@@ -70,18 +70,19 @@ Other Source Files are scratch pads and/or legacy code during the developmental 
 # Training and Evaluation of the Tone Classifier Model BASELINE:
 The Tone Classifier is trained and test on the Tone Perfect Michigan (see dataset.py DatasetMichigan).
 
--The Tone classifier for the baseline task can be trained by running the train.py script.
--Trained models, Training and evaluation logs results will be put in the ./results folder
+- The Tone classifier for the baseline task can be trained by running the train.py script.
+- Trained models, Training and evaluation logs results will be put in the ./results folder
 
 In the current configuration, train.py will perform leave-one-out cross-validation training on the Michigan Dataset for each speaker.
 
 # Evaluation of the ENHANCED case (Segmentation + Tone Classification):
 The evaluation of the Enchanced pipeline used a Synthetic Dataset Built from Tone Perfect Michigan (see dataset.py FusedSentenceMichigan).  
 
--No Training required in this step. We used a process the output of a pre-trained model calculate segmentations.
--Requires trained models trained in BASELINE.
--Evaluation logs results and results will be put in the ./results_segmentation folder
--Detailed results are stored in the .pkl file. They are a dictionary pandas dataframes. 
+- Full Segementation + Tone classification pipeline can be evaluated by running the evaluate_advanced.py script.
+- No Training required in this step. We used a process the output of a pre-trained model calculate segmentations.
+- Requires trained models trained in BASELINE.
+- Evaluation logs results and results will be put in the ./results_segmentation folder
+- Detailed results are stored in the .pkl file. They are a dictionary pandas dataframes. 
 
 In the current configuration, evaluate_advanced.py will evaluate speaker MV1's set of models (Trained on all except MV1) for different overlaps (see dataset.py PhomemeLibrary) 
 
@@ -89,10 +90,10 @@ In the current configuration, evaluate_advanced.py will evaluate speaker MV1's s
 # Running Flask Webapp:
 The Flask application is a small web application that will evaluate your spoken mandarin tones. It uses our ENCHANCED pipeline to perform Segmentation+ToneClassification+ASR to evaluate user utterance in real time.
 
--Navigate to the Flask folder
--Run the flaskmain.py script. Change the port as needed. 
--webapp will be hosted on localhost:port
--Please use Chrome access the webapp. Other browsers might not work.
+- Navigate to the Flask folder
+- Run the flaskmain.py script. Change the port as needed. 
+- Webapp will be hosted on localhost:port
+- Please use Chrome access the webapp. Other browsers might not work.
 
 
 
