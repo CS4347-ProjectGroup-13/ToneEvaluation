@@ -110,14 +110,22 @@
 
         function speakMandarin(text) {
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'zh-CN'; 
-            speechSynthesis.speak(utterance);
+            // utterance.lang = 'zh-CN'; 
+            const voices = window.speechSynthesis.getVoices();
+            console.log(voices)
+            for (let i = 0; i < voices.length; i++) {
+                    if (voices[i].name === "Google 普通话（中国大陆）") {
+                        utterance.voice = voices[i];
+                    }
+                }
+            console.log(utterance)
+            window.speechSynthesis.speak(utterance);
                 }
                 
         const playButton = document.getElementById('playButton');
 
         playButton.addEventListener('click', function() {
-            const mandarinText = mandarinCharacters.textContent;
+            const mandarinText = chineseInput.value;
             speakMandarin(mandarinText);
         });
 
